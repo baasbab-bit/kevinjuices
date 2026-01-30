@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pick Queue (Phase 1)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background:#f6f7f9; color:#111; }
+    header { position: sticky; top:0; background:#fff; border-bottom:1px solid #e6e6e6; padding:12px 14px; display:flex; gap:10px; align-items:center; }
+    header h1 { font-size:16px; margin:0; font-weight:700; }
+    .grow { flex:1; }
+    .btn { border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:600; }
+    .btn:active { transform: translateY(1px); }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .muted { color:#666; font-size:12px; }
+    .tabs { display:flex; gap:8px; padding:12px 14px; }
+    .tab { padding:8px 10px; border-radius:999px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:700; }
+    .tab.active { background:#111; color:#fff; border-color:#111; }
+    .wrap { padding: 0 14px 18px; }
+    .grid { display:grid; grid-template-columns:1fr; gap:10px; }
+    .card { background:#fff; border:1px solid #e6e6e6; border-radius:14px; padding:12px; cursor:pointer; }
+    .topline { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .ordno { font-weight:900; }
+    .name { font-weight:700; margin-top:4px; }
+    .total { font-weight:900; }
+    .pills { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { font-size:12px; border:1px solid #ddd; padding:4px 8px; border-radius:999px; background:#fafafa; }
+    .pill.ok { border-color:#bfe6c6; background:#f1fbf3; }
+    .pill.warn { border-color:#ffe2a8; background:#fff8e8; }
+    .pill.bad { border-color:#ffb5b5; background:#fff0f0; }
+
+    /* Modal */
+    .modalBackdrop { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; }
+    .modalBackdrop.show { display:flex; }
+    .sheet { width:100%; max-width:780px; margin: 0 auto; background:#fff; border-radius:18px 18px 0 0; padding:14px; max-height: 88vh; overflow:auto; }
+    .row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .sheet h2 { margin:0; font-size:16px; }
+    .close { border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:800; }
+    .sec { margin-top:12px; border-top:1px solid #eee; padding-top:12px; }
+    .kv { display:grid; grid-template-columns: 120px 1fr; gap:6px 12px; font-size:13px; }
+    .kv div { padding:2px 0; }
+    .items { display:flex; flex-direction:column; gap:10px; }
+    .item { display:flex; gap:10px; border:1px solid #eee; border-radius:12px; padding:10px; }
+
+    .pickCb { width:18px; height:18px; margin-top:4px; }
+    .pickCol { display:flex; align-items:flex-start; }
+
+    .thumb { width:54px; height:54px; border-radius:10px; background:#f1f1f1; object-fit:cover; flex: 0 0 54px; }
+    .itName { font-weight:800; }
+    .itOpt { font-size:12px; color:#666; margin-top:2px; }
+    .itQty { font-weight:900; margin-right:6px; }
+    .toolbar { display:flex; gap:8px; align-items:center; }
+    .input { padding:8px 10px; border:1px solid #ddd; border-radius:10px; width: 420px; max-width: 52vw; }
+    .statusDot { width:10px; height:10px; border-radius:999px; background:#bbb; display:inline-block; margin-right:8px; }
+    .okDot { background:#2ecc71; }
+    .badDot { background:#e74c3c; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pick Queue</h1>
+    <div class="grow"></div>
+    <span class="muted" id="buildInfo">not connected</span>
+    <button class="btn" id="btnSettings">Settings</button>
+    <button class="btn" id="btnRefresh">Refresh</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="open" id="tabOpen">Open orders</button>
+    <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld</button>
+  </div>
+
+  <div class="wrap">
+    <div class="muted" id="hint"></div>
+    <div class="grid" id="list"></div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modalBackdrop" id="settingsModal">
+    <div class="sheet">
+      <div class="row">
+        <h2>Settings</h2>
+        <button class="close" id="closeSettings">Close</button>
+      </div>
+      <div class="sec">
+        <div class="kv">
+          <div class="muted">API URL</div>
+          <div>
+            <input class="input" id="apiBase" placeholder="https://script.google.com/macros/s/.../exec" />
+            <div class="muted" style="margin-top:6px;">Tip: plak de Web App /exec URL hier.</div>
+          </div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button class="btn" id="btnTestPing">Test ping</button>
+          <button class="btn" id="btnSaveApi">Save</button>
+        </div>
+        <div class="muted" id="pingResult" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Detail Modal -->
+  <div class="modalBackdrop" id="orderModal">
+    <div class="sheet">
+      <div class="row">
+        <h2 id="odTitle">Order</h2>
+        <button class="close" id="closeOrder">Close</button>
+      </div>
+
+      <div class="sec">
+        <div class="kv" id="odKV"></div>
+      </div>
+
+      <div class="sec">
+        <div class="row" style="margin-bottom:10px;">
+          <strong>WhatsApp</strong>
+          <span class="muted" id="waStatusText">—</span>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" id="btnWhatsApp" disabled>WhatsApp klant</button>
+          <button class="btn" id="btnToggleWA">Toggle WA sent</button>
+        </div>
+
+        <div class="muted" id="waPrep" style="display:none;margin-top:8px;">Bericht: —</div>
+
+        <div class="muted" id="waResult" style="margin-top:10px;"></div>
+      </div>
+
+
+      <div class="sec">
+        <div class="row" style="margin-bottom:10px;">
+          <strong>Items</strong>
+          <span class="muted" id="odItemsCount"></span>
+          <span class="muted" id="odPickStatus"></span>
+        </div>
+        <div class="items" id="odItems"></div>
+      </div>
+
+      <div class="sec" id="odActionsSec">
+        <div class="row" style="margin-bottom:10px;">
+          <strong>Afhandeling</strong>
+          <span class="muted" id="odStatusHint">—</span>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" id="btnMarkDone" disabled>Afgehandeld</button>
+          <button class="btn" id="btnCancel">Cancel</button>
+        </div>
+
+        <div id="cancelBox" style="display:none; margin-top:10px;">
+          <div class="muted" style="margin-bottom:6px;">Reden (verplicht bij cancel)</div>
+          <textarea id="cancelNote" rows="3" style="width:100%; padding:10px; border:1px solid rgba(0,0,0,.15); border-radius:12px;"></textarea>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn" id="btnConfirmCancel">Bevestig Cancel</button>
+            <button class="btn" id="btnCancelBack">Terug</button>
+          </div>
+        </div>
+
+        <div class="muted" id="odActionResult" style="margin-top:10px;"></div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  // --- Basic state ---
+  const LS_KEY = "pq_api_base_v1";
+  let currentTab = "open";
+  let lastOrders = [];
+
+  function getApiBase() {
+    return (localStorage.getItem(LS_KEY) || "").trim();
+  }
+  function setApiBase(v) {
+    localStorage.setItem(LS_KEY, (v || "").trim());
+  }
+
+  // --- JSONP helper ---
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cbName = "cb_" + Math.random().toString(36).slice(2);
+      const script = document.createElement("script");
+      const sep = url.includes("?") ? "&" : "?";
+      script.src = url + sep + "callback=" + cbName + "&_=" + Date.now();
+      script.onerror = () => {
+        cleanup();
+        reject(new Error("JSONP load error"));
+      };
+      window[cbName] = (data) => {
+        cleanup();
+        resolve(data);
+      };
+      function cleanup() {
+        try { delete window[cbName]; } catch(e) { window[cbName] = undefined; }
+        if (script && script.parentNode) script.parentNode.removeChild(script);
+      }
+      document.body.appendChild(script);
+    });
+  }
+
+  function api(action, params={}) {
+    const base = getApiBase();
+    if (!base) return Promise.reject(new Error("Missing API base URL. Open Settings."));
+    const u = new URL(base);
+    u.searchParams.set("action", action);
+    for (const [k,v] of Object.entries(params)) u.searchParams.set(k, v);
+    return jsonp(u.toString());
+  }
+
+  // --- UI render ---
+  function pill(text, kind) {
+    const span = document.createElement("span");
+    span.className = "pill " + (kind || "");
+    span.textContent = text;
+    return span;
+  }
+
+  function renderList(orders) {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+
+    if (!orders.length) {
+      document.getElementById("hint").textContent = (currentTab === "open")
+        ? "Geen open orders."
+        : "Geen afgehandelde orders.";
+      return;
+    }
+    document.getElementById("hint").textContent = "";
+
+    orders.forEach(o => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.onclick = () => openOrder(o.OrderNumber);
+
+      const top = document.createElement("div");
+      top.className = "topline";
+
+      const left = document.createElement("div");
+      left.innerHTML = `<div class="ordno">${escapeHtml(o.OrderNumber || "")}</div>
+                        <div class="name">${escapeHtml(o.CustomerName || "")}</div>`;
+
+      const right = document.createElement("div");
+      right.innerHTML = `<div class="total">${formatSRD(o.OrderTotalSRD)}</div>
+                         <div class="muted">${escapeHtml(o.CreatedAt || "")}</div>`;
+
+      top.appendChild(left);
+      top.appendChild(right);
+
+      const pills = document.createElement("div");
+      pills.className = "pills";
+
+      // WA pill
+      pills.appendChild(
+        pill("WA: " + (o.WhatsAppSent ? "Sent" : "Not sent"), o.WhatsAppSent ? "ok" : "warn")
+      );
+
+      // Payment pill (phase1: minimal)
+      const pay = (o.PaymentStatus || "").toString().trim();
+      pills.appendChild(
+        pill("Pay: " + (pay ? pay : "—"), pay === "Paid" ? "ok" : (pay === "Unpaid" ? "warn" : ""))
+      );
+
+      // Status pill (open tab can show Open; closed tab shows actual)
+      const st = (o.OrderStatus || "Open").toString().trim() || "Open";
+      pills.appendChild(
+        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Delivered" || st === "PickedUp" ? "ok" : ""))
+      );
+
+      card.appendChild(top);
+      card.appendChild(pills);
+      list.appendChild(card);
+    });
+  }
+
+  function formatSRD(v) {
+    const n = Number(v || 0);
+    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  // --- Tabs & load ---
+  async function loadBuildInfo() {
+    try {
+      const res = await api("ping");
+      if (res && res.ok) {
+        document.getElementById("buildInfo").textContent = `${res.build} • ${res.time}`;
+      } else {
+        document.getElementById("buildInfo").textContent = "ping failed";
+      }
+    } catch (e) {
+      document.getElementById("buildInfo").textContent = "not connected";
+    }
+  }
+
+  async function loadOrders() {
+    const action = currentTab === "open" ? "getOpenOrders" : "getClosedOrders";
+    const res = await api(action);
+    if (!res || !res.ok) throw new Error((res && res.error) || "API error");
+    lastOrders = res.orders || [];
+    renderList(lastOrders);
+  
+    prefetchTopDetails_(lastOrders);
+}
+
+  function setTab(tab) {
+    currentTab = tab;
+    document.getElementById("tabOpen").classList.toggle("active", tab === "open");
+    document.getElementById("tabClosed").classList.toggle("active", tab === "closed");
+  }
+
+  // --- Order detail ---
+  async function openOrder(orderNumber) {
+    try {
+      const modal = document.getElementById("orderModal");
+      modal.classList.add("show");
+document.getElementById("odTitle").textContent = "Order " + orderNumber;
+      document.getElementById("odKV").innerHTML = `<div class="muted">Loading</div><div>…</div>`;
+      document.getElementById("odItems").innerHTML = "";
+      document.getElementById("odItemsCount").textContent = "";
+
+      // Fast path: use cached order detail if available
+      const cached = getCachedOrderDetail_(orderNumber);
+      if (cached) {
+        const oCached = cached;
+        currentOrder = oCached;
+        initPickState_(currentOrder);
+
+        // WhatsApp button starts disabled until message is prefetched
+        const btnWA = document.getElementById("btnWhatsApp");
+        if (btnWA) btnWA.disabled = true;
+        setWAPrepText_("", false);
+        setWAUI(currentOrder);
+        const waResEl = document.getElementById("waResult");
+        if (waResEl) waResEl.textContent = "";
+        setWAPrepText_("", false);
+
+        // Render immediately from cache
+        applyOrderToModal_(oCached);
+        updateOrderActionsUI_();
+
+        // Prefetch WhatsApp message in background; enable button only when ready
+        prefetchWAMsg(currentOrder.OrderNumber)
+          .then(() => {
+            if (currentOrder && currentOrder.OrderNumber === oCached.OrderNumber) {
+              const btn = document.getElementById("btnWhatsApp");
+              if (btn) btn.disabled = false;
+              setWAPrepText_("", false);
+            }
+          })
+          .catch(() => {
+            if (currentOrder && currentOrder.OrderNumber === oCached.OrderNumber) {
+              const btn = document.getElementById("btnWhatsApp");
+              if (btn) btn.disabled = true;
+              setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
+            }
+          });
+
+        // Refresh cache in background (won't block UI)
+        prefetchOrderDetail_(orderNumber).then(fresh => {
+          if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
+            // Update modal if still on same order
+            initPickState_(fresh);
+            applyOrderToModal_(fresh);
+          }
+        }).catch(()=>{});
+
+        return;
+      }
+
+      const res = await api("getOrder", { orderNumber });
+      if (!res || !res.ok) throw new Error((res && res.error) || "API error");
+
+      const o = res.order || {};
+      currentOrder = o;
+      initPickState_(currentOrder);
+
+      // WhatsApp button starts disabled until message is prefetched
+      const btnWA = document.getElementById("btnWhatsApp");
+      if (btnWA) btnWA.disabled = true;
+      setWAPrepText_("", false);
+      setWAUI(currentOrder);
+      const waResEl = document.getElementById("waResult");
+      if (waResEl) waResEl.textContent = "";
+      setWAPrepText_("", false);
+      // Prefetch WhatsApp message in background; enable button only when ready
+      prefetchWAMsg(currentOrder.OrderNumber)
+        .then(() => {
+          if (currentOrder && currentOrder.OrderNumber === o.OrderNumber) {
+            const btn = document.getElementById("btnWhatsApp");
+            if (btn) btn.disabled = false;
+            setWAPrepText_("", false);
+          }
+        })
+        .catch(() => {
+          if (currentOrder && currentOrder.OrderNumber === o.OrderNumber) {
+            const btn = document.getElementById("btnWhatsApp");
+            if (btn) btn.disabled = true;
+            setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
+          }
+        });
+            // Cache and render
+      setCachedOrderDetail_(o);
+      applyOrderToModal_(o);
+      updateOrderActionsUI_();
+
+    } catch (e) {
+      document.getElementById("odKV").innerHTML = `<div class="muted">Error</div><div>${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function addKV(container, k, v) {
+    const a = document.createElement("div");
+    a.className = "muted";
+    a.textContent = k;
+    const b = document.createElement("div");
+    b.textContent = (v === null || v === undefined) ? "" : String(v);
+    container.appendChild(a);
+    container.appendChild(b);
+  }
+
+  function formatOptions(options) {
+    if (!options) return "";
+    if (Array.isArray(options)) {
+      return options.map(o => (o.name && o.value) ? `${o.name}: ${o.value}` : "").filter(Boolean).join(" · ");
+    }
+    // sometimes options could be object
+    if (typeof options === "object") {
+      return Object.entries(options).map(([k,v]) => `${k}: ${v}`).join(" · ");
+    }
+    return String(options);
+  }
+
+  function firstImageUrl(it) {
+    // Phase 1: minimal; true fallback chain comes later (thumb -> image -> alt list)
+    return it.thumbUrl || it.imageUrl || (Array.isArray(it.altImageUrls) ? it.altImageUrls[0] : "") || "";
+  }
+
+  // --- Modal controls ---
+  const settingsModal = document.getElementById("settingsModal");
+  document.getElementById("btnSettings").onclick = () => {
+    document.getElementById("apiBase").value = getApiBase();
+    document.getElementById("pingResult").textContent = "";
+    settingsModal.classList.add("show");
+  };
+  document.getElementById("closeSettings").onclick = () => settingsModal.classList.remove("show");
+  settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
+
+  document.getElementById("btnSaveApi").onclick = async () => {
+    setApiBase(document.getElementById("apiBase").value);
+    await loadBuildInfo();
+    await safeLoadOrders();
+    setupWhatsAppButtons();
+    settingsModal.classList.remove("show");
+  };
+
+  document.getElementById("btnTestPing").onclick = async () => {
+    setApiBase(document.getElementById("apiBase").value);
+    const el = document.getElementById("pingResult");
+    el.textContent = "Testing…";
+    try {
+      const res = await api("ping");
+      el.textContent = res && res.ok ? `OK: ${res.build} @ ${res.time}` : `Fail: ${(res && res.error) || "unknown"}`;
+    } catch (e) {
+      el.textContent = "Error: " + (e.message || String(e));
+    }
+  };
+
+  const orderModal = document.getElementById("orderModal");
+  document.getElementById("closeOrder").onclick = () => orderModal.classList.remove("show");
+  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.classList.remove("show"); });
+
+  // tabs
+  document.getElementById("tabOpen").onclick = async () => { setTab("open"); await safeLoadOrders(); };
+  document.getElementById("tabClosed").onclick = async () => { setTab("closed"); await safeLoadOrders(); };
+
+  document.getElementById("btnRefresh").onclick = async () => safeLoadOrders();
+
+  async function safeLoadOrders() {
+    try { await loadOrders(); }
+    catch (e) {
+      document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
+      document.getElementById("list").innerHTML = "";
+    }
+  }
+
+  
+  // --- WhatsApp state ---
+  let currentOrder = null;
+  const waMsgCache = new Map(); // orderNumber -> message
+
+  // --- Pick checks state ---
+  let pickChecks = []; // boolean[] aligned to currentOrder.Items
+  let pickSaveTimer = null;
+
+  function normalizePickChecks_(items, checks) {
+    const n = Array.isArray(items) ? items.length : 0;
+    const out = new Array(n);
+    const src = Array.isArray(checks) ? checks : [];
+    for (let i = 0; i < n; i++) out[i] = !!src[i];
+    return out;
+  }
+
+  function initPickState_(orderObj) {
+    const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
+    pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
+    if (orderObj) orderObj.PickChecks = pickChecks;
+    updatePickUI_();
+  }
+
+  function updatePickUI_() {
+    const el = document.getElementById("odPickStatus");
+    if (!el) return;
+    if (!currentOrder) { el.textContent = ""; return; }
+    const done = !!currentOrder.PickComplete;
+    el.textContent = done ? "Pick: Complete ✅" : "Pick: Incompleet";
+    updateOrderActionsUI_();
+  }
+
+  
+  // --- Order status actions (v1 quick close) ---
+  function updateOrderActionsUI_() {
+    const hint = document.getElementById("odStatusHint");
+    const btnDone = document.getElementById("btnMarkDone");
+    const btnCancel = document.getElementById("btnCancel");
+    if (!hint || !btnDone || !btnCancel) return;
+
+    if (!currentOrder) {
+      hint.textContent = "—";
+      btnDone.disabled = true;
+      return;
+    }
+
+    const st = String(currentOrder.OrderStatus || "").trim() || "Open";
+    const alreadyClosed = (st === "PickedUp" || st === "Delivered" || st === "Cancelled");
+    const pickComplete = !!currentOrder.PickComplete;
+
+    hint.textContent = `Status: ${st}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
+    btnDone.disabled = alreadyClosed || !pickComplete;
+  }
+
+  function resetCancelUI_() {
+    const box = document.getElementById("cancelBox");
+    if (box) box.style.display = "none";
+    const note = document.getElementById("cancelNote");
+    if (note) note.value = "";
+  }
+
+  async function setOrderStatus_(status, note) {
+    if (!currentOrder) throw new Error("No order selected");
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    if (!orderNumber) throw new Error("Missing OrderNumber");
+
+    const params = { orderNumber, status: String(status || "").trim() };
+    if (note) params.note = String(note);
+
+    const res = await api("setOrderStatus", params);
+    if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set status");
+
+    currentOrder.OrderStatus = status;
+    document.getElementById("odActionResult").textContent = `✅ Status bijgewerkt: ${status}`;
+
+    // Close modal + refresh lists
+    setTimeout(() => {
+      document.getElementById("orderModal").classList.remove("show");
+      resetCancelUI_();
+      loadOrders();
+    }, 250);
+  }
+
+
+  function scheduleSavePickChecks_() {
+    if (!currentOrder) return;
+    clearTimeout(pickSaveTimer);
+    pickSaveTimer = setTimeout(async () => {
+      try {
+        const res = await api("setPickChecks", {
+          orderNumber: String(currentOrder.OrderNumber || "").trim(),
+          checks: JSON.stringify(pickChecks)
+        });
+        if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
+        currentOrder.PickComplete = !!res.PickComplete;
+        currentOrder.PickChecks = pickChecks;
+        updatePickUI_();
+        // Optional: refresh list to show updated pills/status later
+        // await safeLoadOrders();
+      } catch (e) {
+        const kv = document.getElementById("odKV");
+        // Don't break UI; show subtle error in WA result area (reuse existing spot)
+        const waRes = document.getElementById("waResult");
+        if (waRes) waRes.textContent = "Pick save error: " + (e.message || String(e));
+      }
+    }, 300);
+  }
+  // --- Order detail prefetch/cache ---
+  const DETAIL_PREFETCH_LIMIT = 8;
+  const detailCache = new Map(); // orderNumber -> orderDetailObject
+  const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v1";
+
+  function loadDetailCacheFromSession_() {
+    try {
+      const raw = sessionStorage.getItem(DETAIL_CACHE_SS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== "object") return;
+      Object.keys(obj).forEach(k => {
+        if (obj[k] && typeof obj[k] === "object") detailCache.set(k, obj[k]);
+      });
+    } catch (e) {}
+  }
+
+  function saveDetailCacheToSession_() {
+    try {
+      // Keep it small: max 30 orders
+      const entries = Array.from(detailCache.entries()).slice(0, 30);
+      const obj = {};
+      entries.forEach(([k,v]) => obj[k] = v);
+      sessionStorage.setItem(DETAIL_CACHE_SS_KEY, JSON.stringify(obj));
+    } catch (e) {}
+  }
+
+  function getCachedOrderDetail_(orderNumber) {
+    const key = String(orderNumber || "").trim();
+    if (!key) return null;
+    return detailCache.get(key) || null;
+  }
+
+  function setCachedOrderDetail_(orderObj) {
+    if (!orderObj) return;
+    const key = String(orderObj.OrderNumber || "").trim();
+    if (!key) return;
+    detailCache.set(key, orderObj);
+    saveDetailCacheToSession_();
+  }
+
+  async function prefetchOrderDetail_(orderNumber) {
+    const key = String(orderNumber || "").trim();
+    if (!key) return null;
+    if (detailCache.has(key)) return detailCache.get(key);
+    const res = await api("getOrder", { orderNumber: key });
+    if (res && res.ok && res.order) {
+      setCachedOrderDetail_(res.order);
+      warmImagesForOrder_(res.order);
+      return res.order;
+    }
+    return null;
+  }
+
+  function prefetchTopDetails_(orders) {
+    try {
+      if (!Array.isArray(orders) || !orders.length) return;
+      const top = orders.slice(0, DETAIL_PREFETCH_LIMIT)
+        .map(o => String(o.OrderNumber || "").trim())
+        .filter(Boolean);
+
+      // Fire and forget; don't await to keep UI snappy
+      top.forEach(n => {
+        if (detailCache.has(n)) return;
+        prefetchOrderDetail_(n).catch(()=>{});
+      });
+    } catch (e) {}
+  }
+
+  function warmImagesForOrder_(orderObj) {
+    try {
+      const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
+      items.forEach(it => {
+        const urls = [];
+        if (it && it.thumbUrl) urls.push(it.thumbUrl);
+        if (it && it.imageUrl) urls.push(it.imageUrl);
+        if (it && Array.isArray(it.altImageUrls)) urls.push(...it.altImageUrls);
+        // Warm only first 2 per item to avoid too many requests
+        urls.filter(Boolean).slice(0,2).forEach(u => { const img = new Image(); img.src = u; });
+      });
+    } catch (e) {}
+  }
+
+  function applyOrderToModal_(o) {
+    const kv = document.getElementById("odKV");
+    kv.innerHTML = "";
+
+    addKV(kv, "Order", o.OrderNumber);
+    addKV(kv, "Naam", o.CustomerName);
+    addKV(kv, "Tel", o.CustomerPhone);
+    addKV(kv, "Email", o.CustomerEmail);
+    addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
+    addKV(kv, "Status", o.OrderStatus);
+    addKV(kv, "WA", o.WhatsAppSent ? "Sent" : "Not sent");
+    addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+
+    const items = Array.isArray(o.Items) ? o.Items : [];
+    // sync pickChecks with current order/items
+    pickChecks = normalizePickChecks_(items, o.PickChecks);
+    if (currentOrder && String(currentOrder.OrderNumber||"") === String(o.OrderNumber||"")) {
+      currentOrder.PickChecks = pickChecks;
+      currentOrder.PickComplete = !!o.PickComplete;
+    }
+    updatePickUI_();
+    document.getElementById("odItemsCount").textContent = `${items.length} item(s)`;
+
+    const itemsWrap = document.getElementById("odItems");
+    itemsWrap.innerHTML = "";
+    items.forEach((it, idx) => {
+      const row = document.createElement("div");
+      row.className = "item";
+
+      // Pick checkbox
+      const pickWrap = document.createElement("div");
+      pickWrap.className = "pickCol";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "pickCb";
+      cb.checked = !!pickChecks[idx];
+      cb.onchange = () => {
+        pickChecks[idx] = !!cb.checked;
+        // optimistic local complete (UI only; server remains source of truth)
+        currentOrder.PickChecks = pickChecks;
+        scheduleSavePickChecks_();
+      };
+      pickWrap.appendChild(cb);
+
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.alt = "";
+      img.src = firstImageUrl(it) || "";
+      img.onerror = () => { img.style.display = "none"; };
+
+      const meta = document.createElement("div");
+      const qty = Number(it.qty || 1);
+      const name = it.name || "";
+      meta.innerHTML = `<div class="itName"><span class="itQty">${qty}×</span>${escapeHtml(name)}</div>`;
+
+      const opts = formatOptions(it.options);
+      if (opts) {
+        const d = document.createElement("div");
+        d.className = "itOpt";
+        d.textContent = opts;
+        meta.appendChild(d);
+      }
+
+      row.appendChild(pickWrap);
+      row.appendChild(img);
+      row.appendChild(meta);
+      itemsWrap.appendChild(row);
+    });
+
+    warmImagesForOrder_(o);
+  }
+
+
+  function cacheGetWAMsg(orderNumber) {
+    const key = String(orderNumber || "").trim();
+    if (!key) return "";
+    if (waMsgCache.has(key)) return waMsgCache.get(key) || "";
+    try {
+      const v = sessionStorage.getItem("wa_msg_" + key);
+      if (v) {
+        waMsgCache.set(key, v);
+        return v;
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  function cacheSetWAMsg(orderNumber, msg) {
+    const key = String(orderNumber || "").trim();
+    if (!key) return;
+    const m = String(msg || "");
+    waMsgCache.set(key, m);
+    try { sessionStorage.setItem("wa_msg_" + key, m); } catch (e) {}
+  }
+
+  async function fetchWAMsgFromServer(orderNumber) {
+    const mres = await api("getWhatsAppMessage", { orderNumber: String(orderNumber || "").trim() });
+    if (!mres || !mres.ok) throw new Error((mres && mres.error) || "Failed to build WhatsApp message");
+    return String(mres.message || "");
+  }
+
+  // Optional fallback if template missing server-side (should not happen in normal flow)
+  function buildWhatsAppMessageFallback(order) {
+    const name = order.CustomerName || "klant";
+    const orderNo = order.OrderNumber || "";
+    const total = formatSRD(order.OrderTotalSRD || 0);
+    return `Hi ${name}, we hebben je bestelling ${orderNo} ontvangen. Dank je wel! 🙏\nTotaal: ${total}\nTot straks 🤝`;
+  }
+
+  function prefetchWAMsg(orderNumber) {
+    const key = String(orderNumber || "").trim();
+    if (!key) return Promise.resolve("");
+    const cached = cacheGetWAMsg(key);
+    if (cached) return Promise.resolve(cached);
+
+    return fetchWAMsgFromServer(key).then(msg => {
+      cacheSetWAMsg(key, msg);
+      return msg;
+    });
+  }
+
+  async function markWhatsAppSent(orderNumber, sent) {
+    const res = await api("setWhatsAppSent", { orderNumber, sent: sent ? "true" : "false" });
+    if (!res || !res.ok) throw new Error((res && res.error) || "Failed to update WhatsApp status");
+  }
+
+  function setWAUI(order) {
+    const el = document.getElementById("waStatusText");
+    if (!el) return;
+    if (!order) { el.textContent = "—"; return; }
+    el.textContent = order.WhatsAppSent ? "Sent ✅" : "Not sent ⚠️";
+  }
+
+
+  function setWAPrepText_(t, isError) {
+    const el = document.getElementById("waPrep");
+    if (!el) return;
+    if (isError) {
+      el.style.display = "block";
+      el.textContent = String(t || "WhatsApp bericht niet beschikbaar");
+    } else {
+      el.style.display = "none";
+      el.textContent = "";
+    }
+  }
+
+  function setupWhatsAppButtons() {
+    const btnWA = document.getElementById("btnWhatsApp");
+    const btnToggle = document.getElementById("btnToggleWA");
+    const result = document.getElementById("waResult");
+    const prep = document.getElementById("waPrep");
+    const setPrep = (t) => { if (prep) prep.textContent = "Bericht: " + t; };
+    if (!btnWA || !btnToggle || !result) return;
+
+    btnWA.onclick = async () => {
+      if (!currentOrder) return;
+
+      const phoneRaw = (currentOrder.CustomerPhone || "").replace(/\D/g, "");
+      if (!phoneRaw) {
+        result.textContent = "Geen geldig telefoonnummer.";
+        return;
+      }
+
+      try {
+        // 1) use cached message if available (fast path)
+        let msg = cacheGetWAMsg(currentOrder.OrderNumber);
+        if (msg) setWAPrepText_("", false);
+
+        // 2) if not cached, fetch now (slow path)
+        if (!msg) {
+          setWAPrepText_("", false);
+          result.textContent = "Bericht laden…";
+          msg = await fetchWAMsgFromServer(currentOrder.OrderNumber);
+          cacheSetWAMsg(currentOrder.OrderNumber, msg);
+          setWAPrepText_("", false);
+        }
+
+        // 3) open WhatsApp immediately
+        const url = `https://wa.me/${phoneRaw}?text=${encodeURIComponent(msg)}`;
+        window.open(url, "_blank");
+
+        // 4) mark as sent in sheet (post-action)
+        result.textContent = "Opslaan…";
+        await markWhatsAppSent(currentOrder.OrderNumber, true);
+        currentOrder.WhatsAppSent = true;
+        setWAUI(currentOrder);
+        await safeLoadOrders(); // refresh pills
+        result.textContent = "WhatsApp gemarkeerd als verzonden.";
+      } catch (e) {
+        // last resort fallback message if server/template fails
+        setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
+        try {
+          const fallback = buildWhatsAppMessageFallback(currentOrder);
+          const url = `https://wa.me/${phoneRaw}?text=${encodeURIComponent(fallback)}`;
+          window.open(url, "_blank");
+        } catch (_) {}
+        result.textContent = "Fout: " + (e.message || String(e));
+      }
+    };
+
+    btnToggle.onclick = async () => {
+      if (!currentOrder) return;
+      const newVal = !currentOrder.WhatsAppSent;
+
+      try {
+        result.textContent = "Opslaan…";
+        await markWhatsAppSent(currentOrder.OrderNumber, newVal);
+        currentOrder.WhatsAppSent = newVal;
+        setWAUI(currentOrder);
+        await safeLoadOrders();
+        result.textContent = `WhatsApp status gewijzigd (${newVal ? "Sent" : "Not sent"})`;
+      } catch (e) {
+        result.textContent = "Fout: " + (e.message || String(e));
+      }
+    };
+  }
+
+  // bootstrap
+  (async function init() {
+    loadDetailCacheFromSession_();
+    await loadBuildInfo();
+    await safeLoadOrders();
+    setupWhatsAppButtons();
+    if (!getApiBase()) {
+      document.getElementById("hint").textContent = "Open Settings en plak je Apps Script /exec URL.";
+    }
+  })();
+</script>
+</body>
+</html>
