@@ -265,7 +265,7 @@
       // Status pill (open tab can show Open; closed tab shows actual)
       const st = (o.OrderStatus || "Open").toString().trim() || "Open";
       pills.appendChild(
-        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Delivered" || st === "PickedUp" ? "ok" : ""))
+        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" || st === "Delivered" || st === "PickedUp" ? "ok" : ""))
       );
 
       card.appendChild(top);
@@ -476,6 +476,66 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
   document.getElementById("closeOrder").onclick = () => orderModal.classList.remove("show");
   orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.classList.remove("show"); });
 
+  // --- v1 Afhandeling actions ---
+  (function wireOrderStatusButtons_(){
+    const btnDone = document.getElementById("btnMarkDone");
+    const btnCancel = document.getElementById("btnCancel");
+    const btnConfirmCancel = document.getElementById("btnConfirmCancel");
+    const btnCancelBack = document.getElementById("btnCancelBack");
+    const cancelBox = document.getElementById("cancelBox");
+    const cancelNote = document.getElementById("cancelNote");
+    const resultEl = document.getElementById("odActionResult");
+
+    if (btnDone) {
+      btnDone.onclick = async () => {
+        try {
+          if (resultEl) resultEl.textContent = "";
+          // Guard: only allow when pick complete
+          if (!currentOrder || !currentOrder.PickComplete) {
+            if (resultEl) resultEl.textContent = "⚠️ Pick is nog niet compleet.";
+            return;
+          }
+          await setOrderStatus_("Closed", "");
+        } catch (e) {
+          if (resultEl) resultEl.textContent = "❌ " + (e && e.message ? e.message : String(e));
+        }
+      };
+    }
+
+    if (btnCancel) {
+      btnCancel.onclick = () => {
+        if (resultEl) resultEl.textContent = "";
+        if (cancelBox) cancelBox.style.display = "block";
+        if (cancelNote) cancelNote.focus();
+      };
+    }
+
+    if (btnCancelBack) {
+      btnCancelBack.onclick = () => {
+        if (resultEl) resultEl.textContent = "";
+        resetCancelUI_();
+      };
+    }
+
+    if (btnConfirmCancel) {
+      btnConfirmCancel.onclick = async () => {
+        try {
+          if (resultEl) resultEl.textContent = "";
+          const note = (cancelNote ? String(cancelNote.value || "").trim() : "");
+          if (!note) {
+            if (resultEl) resultEl.textContent = "⚠️ Note is verplicht bij cancel.";
+            if (cancelNote) cancelNote.focus();
+            return;
+          }
+          await setOrderStatus_("Cancelled", note);
+        } catch (e) {
+          if (resultEl) resultEl.textContent = "❌ " + (e && e.message ? e.message : String(e));
+        }
+      };
+    }
+  })();
+
+
   // tabs
   document.getElementById("tabOpen").onclick = async () => { setTab("open"); await safeLoadOrders(); };
   document.getElementById("tabClosed").onclick = async () => { setTab("closed"); await safeLoadOrders(); };
@@ -538,7 +598,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     }
 
     const st = String(currentOrder.OrderStatus || "").trim() || "Open";
-    const alreadyClosed = (st === "PickedUp" || st === "Delivered" || st === "Cancelled");
+    const alreadyClosed = (st === "Closed" || st === "Cancelled" || st === "Delivered" || st === "PickedUp");
     const pickComplete = !!currentOrder.PickComplete;
 
     hint.textContent = `Status: ${st}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
