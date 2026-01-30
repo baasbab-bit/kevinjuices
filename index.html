@@ -55,12 +55,62 @@
     .statusDot { width:10px; height:10px; border-radius:999px; background:#bbb; display:inline-block; margin-right:8px; }
     .okDot { background:#2ecc71; }
     .badDot { background:#e74c3c; }
-  </style>
+
+
+/* --- Mobile optimization (CSS-only) --- */
+@media (max-width: 640px) {
+  header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  header h1 { font-size: 14px; }
+
+  /* Put search on its own line, full width */
+  #searchBox { width: 100% !important; max-width: none !important; flex: 1 1 100%; order: 3; }
+
+  /* Build info becomes smaller and wraps */
+  #buildInfo { flex: 1 1 100%; order: 4; font-size: 11px; }
+
+  /* Buttons a bit smaller */
+  .btn { padding: 7px 9px; border-radius: 12px; font-size: 12px; }
+  .close { padding: 7px 9px; border-radius: 12px; font-size: 12px; }
+
+  .tabs { padding: 10px 12px; gap: 8px; }
+  .tab { padding: 8px 12px; font-size: 13px; }
+
+  .wrap { padding: 0 12px 16px; }
+  .grid { gap: 10px; }
+
+  /* Cards: stack price/date under the name */
+  .card { padding: 10px; border-radius: 16px; }
+  .topline { flex-direction: column; align-items: flex-start; }
+  .total { margin-top: 6px; }
+
+  .pills { gap: 6px; }
+  .pill { font-size: 11px; padding: 4px 8px; }
+
+  /* Modals / bottom sheet: use more of the screen */
+  .modalBackdrop { align-items: stretch; }
+  .sheet { max-height: 92vh; padding: 12px; border-radius: 16px 16px 0 0; }
+
+  /* Key/value table: narrower label column */
+  .kv { grid-template-columns: 92px 1fr; font-size: 12px; }
+
+  /* Inputs full width */
+  .input { width: 100%; max-width: none; }
+
+  /* Items: reduce thumbnail, allow long names to wrap */
+  .item { padding: 8px; gap: 8px; }
+  .thumb { width: 44px; height: 44px; border-radius: 10px; }
+  .itName { font-size: 13px; word-break: break-word; }
+  .itOpt { font-size: 11px; }
+  .pickCb { width: 20px; height: 20px; margin-top: 2px; }
+}
+
+</style>
 </head>
 <body>
   <header>
     <h1>Pick Queue</h1>
     <div class="grow"></div>
+    <input class="input" id="searchBox" placeholder="Zoek order of klant…" style="width:240px;max-width:46vw;" />
     <span class="muted" id="buildInfo">not connected</span>
     <button class="btn" id="btnSettings">Settings</button>
     <button class="btn" id="btnRefresh">Refresh</button>
@@ -73,6 +123,7 @@
 
   <div class="wrap">
     <div class="muted" id="hint"></div>
+    <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
     <div class="grid" id="list"></div>
   </div>
 
@@ -169,12 +220,27 @@
   const LS_KEY = "pq_api_base_v1";
   let currentTab = "open";
   let lastOrders = [];
+  let searchQuery = "";
 
   function getApiBase() {
     return (localStorage.getItem(LS_KEY) || "").trim();
   }
+  function normalizeApiBase_(v) {
+    const raw = (v || "").trim();
+    if (!raw) return "";
+    try {
+      const u = new URL(raw);
+      u.search = "";
+      u.hash = "";
+      return u.toString();
+    } catch (e) {
+      // If it's not a valid URL, keep as-is (will error later in api())
+      return raw;
+    }
+  }
+
   function setApiBase(v) {
-    localStorage.setItem(LS_KEY, (v || "").trim());
+    localStorage.setItem(LS_KEY, normalizeApiBase_(v));
   }
 
   // --- JSONP helper ---
@@ -204,6 +270,12 @@
     const base = getApiBase();
     if (!base) return Promise.reject(new Error("Missing API base URL. Open Settings."));
     const u = new URL(base);
+
+    // IMPORTANT: make sure we don't accidentally reuse old query params
+    // (e.g. a saved URL like .../exec?action=...&status=Cancelled)
+    u.search = "";
+    u.hash = "";
+
     u.searchParams.set("action", action);
     for (const [k,v] of Object.entries(params)) u.searchParams.set(k, v);
     return jsonp(u.toString());
@@ -265,13 +337,41 @@
       // Status pill (open tab can show Open; closed tab shows actual)
       const st = (o.OrderStatus || "Open").toString().trim() || "Open";
       pills.appendChild(
-        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" || st === "Delivered" || st === "PickedUp" ? "ok" : ""))
+        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" ? "ok" : ""))
       );
 
       card.appendChild(top);
       card.appendChild(pills);
       list.appendChild(card);
     });
+  }
+
+
+  function filterOrders_(orders) {
+    const q = (searchQuery || "").trim().toLowerCase();
+    if (!q) return orders || [];
+    return (orders || []).filter(o => {
+      const on = String(o.OrderNumber || "").toLowerCase();
+      const cn = String(o.CustomerName || "").toLowerCase();
+      return on.includes(q) || cn.includes(q);
+    });
+  }
+
+  // Status buckets (Phase 1)
+  const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
+  const OPEN_STATUSES = new Set(["open","awaiting processing","processing","ready for pickup","shipped","out for delivery"]);
+
+  function filterByTabStatus_(orders) {
+    const arr = Array.isArray(orders) ? orders : [];
+    const norm = (s) => String(s || "").trim().toLowerCase();
+
+    if (currentTab === "closed") {
+      // show ALL "closed-like" statuses, case-insensitive
+      return arr.filter(o => CLOSED_STATUSES.has(norm(o && o.OrderStatus)));
+    }
+
+    // open tab: anything NOT closed-like (keep new Ecwid statuses too)
+    return arr.filter(o => !CLOSED_STATUSES.has(norm(o && o.OrderStatus)));
   }
 
   function formatSRD(v) {
@@ -283,6 +383,11 @@
     return String(s).replace(/[&<>"']/g, m => ({
       "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
     }[m]));
+  }
+
+  function setDebug_(msg) {
+    const el = document.getElementById("debugInfo");
+    if (el) el.textContent = msg || "";
   }
 
   // --- Tabs & load ---
@@ -299,21 +404,39 @@
     }
   }
 
-  async function loadOrders() {
+  
+  function sortNewestFirst_(orders) {
+    return (orders || []).slice().sort((a, b) => {
+      const ta = Date.parse(a.CreatedAt || 0);
+      const tb = Date.parse(b.CreatedAt || 0);
+      return tb - ta; // newest first
+    });
+  }
+
+async function loadOrders() {
     const action = currentTab === "open" ? "getOpenOrders" : "getClosedOrders";
     const res = await api(action);
     if (!res || !res.ok) throw new Error((res && res.error) || "API error");
-    lastOrders = res.orders || [];
-    renderList(lastOrders);
-  
-    prefetchTopDetails_(lastOrders);
-}
 
-  function setTab(tab) {
-    currentTab = tab;
-    document.getElementById("tabOpen").classList.toggle("active", tab === "open");
-    document.getElementById("tabClosed").classList.toggle("active", tab === "closed");
+    // Server already returns the right list for each tab.
+    lastOrders = sortNewestFirst_(res.orders || []);
+    setDebug_(`tab=${currentTab} • total=${lastOrders.length} • q="${searchQuery}"`);
+    renderList(filterOrders_(lastOrders));
+
+    prefetchTopDetails_(lastOrders);
   }
+
+  // Switch tabs (Open / Afgehandeld)
+  function setTab(tab) {
+    currentTab = (tab === "closed") ? "closed" : "open";
+    const openBtn = document.getElementById("tabOpen");
+    const closedBtn = document.getElementById("tabClosed");
+    if (openBtn) openBtn.classList.toggle("active", currentTab === "open");
+    if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
+    // keep existing list but apply filter immediately for instant feedback
+    renderList(lastOrders || []);
+  }
+
 
   // --- Order detail ---
   async function openOrder(orderNumber) {
@@ -537,8 +660,8 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
 
 
   // tabs
-  document.getElementById("tabOpen").onclick = async () => { setTab("open"); await safeLoadOrders(); };
-  document.getElementById("tabClosed").onclick = async () => { setTab("closed"); await safeLoadOrders(); };
+  document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); setTab("open"); safeLoadOrders(); });
+  document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); setTab("closed"); safeLoadOrders(); });
 
   document.getElementById("btnRefresh").onclick = async () => safeLoadOrders();
 
@@ -598,7 +721,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     }
 
     const st = String(currentOrder.OrderStatus || "").trim() || "Open";
-    const alreadyClosed = (st === "Closed" || st === "Cancelled" || st === "Delivered" || st === "PickedUp");
+    const alreadyClosed = (st === "Closed" || st === "Cancelled");
     const pickComplete = !!currentOrder.PickComplete;
 
     hint.textContent = `Status: ${st}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
@@ -961,6 +1084,13 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
   // bootstrap
   (async function init() {
     loadDetailCacheFromSession_();
+    const sb = document.getElementById("searchBox");
+    if (sb) {
+      sb.addEventListener("input", () => {
+        searchQuery = sb.value || "";
+        renderList(filterOrders_(lastOrders));
+      });
+    }
     await loadBuildInfo();
     await safeLoadOrders();
     setupWhatsAppButtons();
