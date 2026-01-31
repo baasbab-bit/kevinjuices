@@ -7,16 +7,41 @@
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     body { margin: 0; background:#f6f7f9; color:#111; }
-    header { position: sticky; top:0; background:#fff; border-bottom:1px solid #e6e6e6; padding:12px 14px; display:flex; gap:10px; align-items:center; }
+    header { position: sticky; top:0; background:#fff; border-bottom:1px solid #e6e6e6; padding:12px 14px; display:flex; gap:10px; align-items:center; z-index: 1000; }
+
     header h1 { font-size:16px; margin:0; font-weight:700; }
     .grow { flex:1; }
     .btn { border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:600; }
     .btn:active { transform: translateY(1px); }
     .btn[disabled] { opacity: .45; cursor: not-allowed; }
     .muted { color:#666; font-size:12px; }
-    .tabs { display:flex; gap:8px; padding:12px 14px; }
-    .tab { padding:8px 10px; border-radius:999px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:700; }
-    .tab.active { background:#111; color:#fff; border-color:#111; }
+    .tabs {
+      display:flex;
+      gap:0;
+      padding:0 14px;
+      background:#fff;
+      border-bottom:1px solid #e6e6e6;
+    }
+    .tab {
+      flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:12px 10px;
+      border:0;
+      border-bottom:3px solid transparent;
+      border-radius:0;
+      background:transparent;
+      cursor:pointer;
+      font-weight:800;
+      color:#667085;
+    }
+    .tab.active {
+      color: var(--wa-green, #128C7E);
+      border-bottom-color: var(--wa-green, #128C7E);
+      background:transparent;
+    }
     
     /* Badges + loading spinner */
     .badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 6px;
@@ -30,7 +55,11 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 .wrap { padding: 0 14px 18px; }
     .grid { display:grid; grid-template-columns:1fr; gap:10px; }
-    .card { background:#fff; border:1px solid #e6e6e6; border-radius:14px; padding:12px; cursor:pointer; }
+    .card { background:#fff; border:1px solid #e6e6e6; border-radius:14px; padding:12px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s ease, transform .06s ease; }
+    .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+    .card:active { transform: translateY(1px); }
+    @media (hover:none) { .card:hover { box-shadow: 0 1px 2px rgba(0,0,0,.04); } }
+
 
     /* Card status accents */
     .card { position: relative; overflow: hidden; }
@@ -57,16 +86,16 @@
       .ordno { font-size: 14px; }
       .total { font-size: 14px; }
       .name { font-size: 13px; }
-      .cardDt { font-size: 12px; }
+      .cardDt { white-space:nowrap; color:#666; font-size:12px; }
       .pills { gap:6px; }
       .pill { font-size: 11px; padding:3px 7px; }
     }
     .topline { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
 
     /* Card header layout (Option D compact) */
-    .cardHead { display:flex; flex-direction:column; gap:4px; }
-    .cardRow1 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
-    .cardRow2 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .cardHead { display:flex; flex-direction:column; gap:6px; }
+    .cardRow1 { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+    .cardRow2 { display:flex; align-items:baseline; gap:8px; justify-content:flex-start; flex-wrap:wrap; }
     .cardDt { white-space:nowrap; }
     @media (max-width: 480px) {
       .cardRow2 { gap:8px; }
@@ -81,7 +110,14 @@
     .pill.warn { border-color:#ffe2a8; background:#fff8e8; }
     .pill.bad { border-color:#ffb5b5; background:#fff0f0; }
 
-    /* Modal */
+    
+    /* WA pill icons */
+    .pill.wa { display:inline-flex; align-items:center; gap:6px; }
+    .pill.wa .ico { width:14px; height:14px; display:inline-block; }
+    .pill.wa.ok { border-color:#bfe6c6; background:#f1fbf3; }
+    .pill.wa.warn { border-color:#ffe2a8; background:#fff8e8; }
+    .pill.wa svg { fill: currentColor; }
+/* Modal */
     .modalBackdrop { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; }
     .modalBackdrop.show { display:flex; }
     .sheet { width:100%; max-width:780px; margin: 0 auto; background:#fff; border-radius:18px 18px 0 0; padding:14px; max-height: 88vh; overflow:auto; }
@@ -207,7 +243,7 @@
       }
 
       .tabs { padding: 10px 12px; gap: 10px; }
-      .tab { padding: 10px 14px; border-radius: 999px; }
+      .tab { padding: 10px 14px; border-radius: 14px 14px 0 0; }
 
       .wrap { padding: 0 12px 18px; }
       .grid { gap: 12px; }
@@ -237,7 +273,572 @@
       #hint { font-size: 12px; color: #7a7a7a; }
     }
 
-</style>
+
+/* --- Visual polish (v7.1) --- */
+:root{
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #111;
+  --muted: #667085;
+  --border: #e6e6e6;
+  --shadow: 0 6px 18px rgba(16,24,40,.08);
+  --shadow2: 0 2px 8px rgba(16,24,40,.06);
+
+  --c-open: #2563eb;        /* blue */
+  --c-closed: #16a34a;      /* green */
+  --c-cancelled: #dc2626;   /* red */
+}
+
+body{
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(37,99,235,.10), transparent 55%),
+              radial-gradient(1000px 520px at 95% 0%, rgba(22,163,74,.10), transparent 55%),
+              var(--bg);
+  color: var(--text);
+}
+
+.muted{ color: var(--muted); }
+
+header{
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px);
+}
+
+.card{
+  background: var(--card);
+  box-shadow: var(--shadow2);
+  border-color: rgba(15,23,42,.10);
+  position: relative;
+  overflow: hidden;
+}
+
+.card:active{ transform: translateY(1px); }
+
+.card::before{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:4px;
+  background: rgba(2,6,23,.18);
+}
+
+.card[data-status="open"]::before{ background: var(--c-open); }
+.card[data-status="closed"]::before{ background: var(--c-closed); }
+.card[data-status="cancelled"]::before{ background: var(--c-cancelled); }
+
+.cardHead{ padding-left: 6px; } /* small visual alignment with status bar */
+
+.total{
+  letter-spacing: .2px;
+}
+
+/* Pills slightly more modern */
+.pill{
+  border-color: rgba(15,23,42,.10);
+  background: rgba(2,6,23,.02);
+}
+.pill.ok{ border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.08); }
+.pill.warn{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10); }
+.pill.bad{ border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.08); }
+
+/* Tabs: small color cue */
+.tab.active{
+  box-shadow: 0 6px 14px rgba(17,24,39,.18);
+}
+
+
+/* === WhatsApp vibe header + tabs (CSS-only) === */
+:root{
+  --wa-green:#075E54;
+  --wa-green2:#128C7E;
+  --wa-mint:#DCF8C6;
+  --wa-surface:#F0FDF4;
+}
+header{
+  background: linear-gradient(90deg, var(--wa-green), var(--wa-green2));
+  border-bottom: 0;
+  box-shadow: 0 6px 18px rgba(0,0,0,.10);
+  color:#fff;
+}
+header h1{ color:#fff; }
+header .muted{ color: rgba(255,255,255,.85); }
+header .btn{
+  background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.28);
+  color:#fff;
+}
+header .btn:hover{ background: rgba(255,255,255,.18); }
+header .btn:active{ transform: translateY(1px); }
+
+header .input{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.28);
+  color:#fff;
+}
+header .input::placeholder{ color: rgba(255,255,255,.72); }
+
+/* Tabs look more "app-like" */
+.tabs{
+  background: var(--wa-surface);
+  border-bottom: 1px solid rgba(7,94,84,.10);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.tab{
+  border-color: rgba(7,94,84,.20);
+  background:#fff;
+  color: var(--wa-green);
+}
+.tab .badge{
+  background: rgba(7,94,84,.10);
+  color: var(--wa-green);
+  border-color: rgba(7,94,84,.18);
+}
+.tab.active{
+  background: var(--wa-green2);
+  border-color: var(--wa-green2);
+  color:#fff;
+}
+.tab.active .badge{
+  background: rgba(255,255,255,.20);
+  color:#fff;
+  border-color: rgba(255,255,255,.26);
+}
+
+/* Slight mint hint behind list (subtle WhatsApp feel) */
+.wrap{
+  background: linear-gradient(180deg, rgba(220,248,198,.22), rgba(246,247,249,0) 140px);
+}
+
+
+
+/* ===== WhatsApp vibe cohesive theme (CSS-only) ===== */
+:root{
+  --wa-green:#25D366;
+  --wa-green-dark:#1DA851;
+  --wa-teal:#075E54;
+  --wa-bg:#EAF7F1;          /* chat background */
+  --wa-surface:#FFFFFF;     /* cards/sheets */
+  --wa-border:#D7EBDD;
+  --wa-text:#0B1F16;
+  --wa-muted:#5E6C64;
+  --wa-pill:#F3FAF6;
+  --wa-shadow: 0 6px 18px rgba(11,31,22,.08);
+  --wa-shadow-soft: 0 3px 12px rgba(11,31,22,.06);
+}
+
+/* Page */
+body{
+  background: var(--wa-bg);
+  color: var(--wa-text);
+}
+.muted{ color: var(--wa-muted); }
+
+/* Header + search */
+header{
+  background: linear-gradient(180deg, rgba(37,211,102,.14), rgba(37,211,102,.06) 55%, rgba(255,255,255,1));
+  border-bottom: 1px solid var(--wa-border);
+  box-shadow: var(--wa-shadow-soft);
+}
+header h1{ color: var(--wa-text); letter-spacing:.2px; }
+.input{
+  border-color: var(--wa-border);
+  background: rgba(255,255,255,.92);
+}
+.input:focus{
+  outline: none;
+  border-color: rgba(37,211,102,.55);
+  box-shadow: 0 0 0 3px rgba(37,211,102,.18);
+}
+
+/* Buttons */
+.btn, .close{
+  border-color: var(--wa-border);
+  background: rgba(255,255,255,.92);
+}
+.btn:hover, .close:hover{ filter: brightness(.99); }
+.btn:active, .close:active{ transform: translateY(1px); }
+.btnPrimary{
+  background: var(--wa-green);
+  border-color: var(--wa-green);
+  color: #fff;
+}
+.btnPrimary:hover{ background: var(--wa-green-dark); border-color: var(--wa-green-dark); }
+
+/* Tabs */
+.tabs{
+  background: var(--wa-bg);
+}
+.tab{
+  border-color: var(--wa-border);
+  background: rgba(255,255,255,.82);
+}
+.tab.active{
+  background: var(--wa-teal);
+  border-color: var(--wa-teal);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(7,94,84,.18);
+}
+
+/* Cards */
+.card{
+  background: var(--wa-surface);
+  border-color: var(--wa-border);
+  box-shadow: var(--wa-shadow-soft);
+}
+.card:active{ transform: translateY(1px); }
+
+/* Topline typography tweaks */
+.ordno{ color: var(--wa-text); }
+.total{ color: var(--wa-text); }
+
+/* Pills */
+.pill{
+  border-color: var(--wa-border);
+  background: var(--wa-pill);
+  color: var(--wa-text);
+}
+.pill.ok{
+  border-color: rgba(37,211,102,.35);
+  background: rgba(37,211,102,.12);
+}
+.pill.warn{
+  border-color: rgba(255,193,7,.40);
+  background: rgba(255,193,7,.14);
+}
+.pill.bad{
+  border-color: rgba(231,76,60,.35);
+  background: rgba(231,76,60,.12);
+}
+
+/* Modal */
+.modalBackdrop{
+  background: rgba(6,25,18,.55);
+}
+.sheet{
+  background: var(--wa-surface);
+  border-top: 1px solid var(--wa-border);
+  box-shadow: 0 -10px 22px rgba(11,31,22,.16);
+}
+.sec{ border-top-color: rgba(0,0,0,.06); }
+.kv{ color: var(--wa-text); }
+.kv .muted{ color: var(--wa-muted); }
+.item{
+  border-color: rgba(0,0,0,.06);
+  background: rgba(255,255,255,.9);
+}
+.thumb{ background: rgba(0,0,0,.04); }
+
+/* Small accent line under header area (optional visual separation) */
+.wrap{ padding-top: 10px; }
+
+/* Make checkboxes and focus states feel consistent */
+.pickCb{
+  accent-color: var(--wa-green);
+}
+
+
+/* ===== WhatsApp theme readability hotfix (override) ===== */
+header{
+  background: linear-gradient(90deg, #075E54, #128C7E) !important;
+  color:#fff !important;
+}
+header h1{ color:#fff !important; }
+#buildInfo{ color: rgba(255,255,255,.85) !important; }
+header .muted{ color: rgba(255,255,255,.82) !important; }
+
+/* Header buttons (Settings/Refresh) */
+header .btn{
+  background: rgba(255,255,255,.14) !important;
+  border-color: rgba(255,255,255,.28) !important;
+  color:#fff !important;
+}
+header .btn:hover{ background: rgba(255,255,255,.20) !important; }
+header .btn[disabled]{ opacity:.55 !important; }
+
+/* Search input: keep high contrast on dark header */
+header input,
+header .input,
+#searchInput{
+  background: rgba(255,255,255,.96) !important;
+  color:#111 !important;
+  border-color: rgba(0,0,0,.10) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.10) !important;
+}
+header input::placeholder,
+header .input::placeholder,
+#searchInput::placeholder{
+  color:#6b7280 !important;
+}
+
+/* Tabs band should not get covered and should feel connected */
+.tabs{
+  background: linear-gradient(90deg, #075E54, #128C7E) !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  position: sticky;
+  top: 52px; /* keep below header */
+  z-index: 40;
+}
+.tab{
+  background: rgba(255,255,255,.14) !important;
+  border-color: rgba(255,255,255,.28) !important;
+  color:#fff !important;
+}
+.tab.active{
+  background: #25D366 !important;
+  border-color: #25D366 !important;
+  color:#0b2b22 !important;
+}
+
+
+/* === WhatsApp vibe: card theme (readable) === */
+:root{
+  --wa-header:#075E54;
+  --wa-accent:#25D366;
+  --wa-accent-2:#128C7E;
+  --wa-bg:#E9F5EF;
+  --wa-card:#FFFFFF;
+  --wa-text:#0b1b14;
+  --wa-muted:rgba(11,27,20,.62);
+  --wa-border:rgba(11,27,20,.10);
+  --wa-shadow:0 6px 18px rgba(0,0,0,.06);
+}
+
+body{ background: var(--wa-bg); color: var(--wa-text); }
+.muted{ color: var(--wa-muted); }
+
+/* Cards */
+.card{
+  position:relative;
+  background: var(--wa-card);
+  border:1px solid var(--wa-border);
+  border-radius:18px;
+  box-shadow: var(--wa-shadow);
+  padding:14px 14px 12px 18px; /* extra left room for accent bar */
+  overflow:hidden;
+}
+.card::before{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:6px;
+  background: var(--accent, var(--wa-accent));
+}
+.card[data-status="open"]{ --accent: var(--wa-accent); }
+.card[data-status="closed"]{ --accent: var(--wa-accent-2); }
+.card[data-status="cancelled"]{ --accent: #e74c3c; }
+
+.cardHead{ display:block; }
+.cardRow1{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+}
+.cardRow2{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:6px;
+}
+.ordno{ letter-spacing:.2px; }
+.total{ font-weight:900; }
+.cardDt{ font-variant-numeric: tabular-nums; }
+
+.pills{ margin-top:10px; gap:8px; }
+.pill{
+  border-color: rgba(11,27,20,.12);
+  background: rgba(255,255,255,.65);
+}
+.pill.ok{
+  border-color: rgba(37,211,102,.35);
+  background: rgba(37,211,102,.12);
+}
+.pill.warn{
+  border-color: rgba(255,194,66,.45);
+  background: rgba(255,194,66,.14);
+}
+.pill.bad{
+  border-color: rgba(231,76,60,.40);
+  background: rgba(231,76,60,.12);
+}
+
+/* Touch feedback */
+.card:active{ transform: translateY(1px); }
+
+/* Mobile tuning */
+@media (max-width: 520px){
+  .wrap{ padding-left:12px; padding-right:12px; }
+  .card{ padding:12px 12px 10px 16px; border-radius:16px; }
+  .card::before{ width:5px; }
+  .pills{ margin-top:8px; }
+  .pill{ font-size:12px; padding:5px 10px; }
+}
+
+  /* =========================================================
+     A) Accent kleuren consistent met WhatsApp theme
+     B) Pills/chips consistent + betere leesbaarheid
+     C) Card polish: spacing + tap feedback
+     (Overrides placed at end so they win over earlier CSS)
+  ========================================================== */
+
+  :root{
+    /* WhatsApp-ish status accents */
+    --c-open: #25D366;      /* WhatsApp green */
+    --c-closed: #128C7E;    /* WhatsApp teal */
+    --c-delivered: #128C7E;
+    --c-pickedup: #0f766e;
+    --c-cancelled: #ef4444;
+    --c-unknown: #94a3b8;
+  }
+
+  /* A) status -> accent kleur (bar + subtiele tint) */
+  .card{ 
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, .10);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, .06);
+    transition: transform .08s ease, box-shadow .12s ease;
+  }
+  .card:active{ transform: translateY(1px); box-shadow: 0 6px 16px rgba(2, 6, 23, .08); }
+  .card::before{ width: 6px; border-radius: 14px 0 0 14px; }
+
+  .card[data-status="open"]{ --accent: var(--c-open); }
+  .card[data-status=""]{ --accent: var(--c-open); }
+  .card[data-status="closed"]{ --accent: var(--c-closed); }
+  .card[data-status="delivered"]{ --accent: var(--c-delivered); }
+  .card[data-status="pickedup"]{ --accent: var(--c-pickedup); }
+  .card[data-status="cancelled"]{ --accent: var(--c-cancelled); }
+  .card[data-status]:not([data-status="open"]):not([data-status=""]):not([data-status="closed"]):not([data-status="delivered"]):not([data-status="pickedup"]):not([data-status="cancelled"]) {
+    --accent: var(--c-unknown);
+  }
+
+  /* subtiele accent glow, maar leesbaar houden */
+  .card{ position: relative; overflow: hidden; }
+  .card::after{
+    content:"";
+    position:absolute;
+    inset: 0;
+    background: radial-gradient(900px 180px at -10% 0%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 55%);
+    pointer-events:none;
+  }
+
+  /* C) Layout: netter gebruik van ruimte */
+  .topline{ align-items: flex-start; }
+  .ordno{ font-size: 22px; font-weight: 800; letter-spacing: .15px; }
+  .name{ font-size: 24px; font-weight: 900; line-height: 1.12; }
+  .total{ font-size: 24px; font-weight: 900; }
+  .muted{ color: rgba(255,255,255,.85); }
+  /* Maar binnen kaarten willen we donker muted */
+  .card .muted{ color: rgba(15,23,42,.55); }
+
+  /* B) Pills: whatsapp-like chips, consistent spacing */
+  .pills{ gap:10px; }
+  .pill{
+    padding: 8px 12px;
+    border-radius: 999px;
+    border-color: rgba(15,23,42,.12);
+    background: rgba(248,250,252,.9);
+    font-weight: 700;
+  }
+  .pill.ok{ border-color: color-mix(in srgb, var(--c-open) 32%, rgba(15,23,42,.12)); background: color-mix(in srgb, var(--c-open) 12%, #fff); }
+  .pill.warn{ border-color: color-mix(in srgb, #f59e0b 34%, rgba(15,23,42,.12)); background: color-mix(in srgb, #f59e0b 12%, #fff); }
+  .pill.bad{ border-color: color-mix(in srgb, var(--c-cancelled) 34%, rgba(15,23,42,.12)); background: color-mix(in srgb, var(--c-cancelled) 10%, #fff); }
+
+  /* Mobile: iets compacter, betere tik targets */
+  @media (max-width: 520px){
+    .card{ padding: 14px; }
+    .ordno{ font-size: 26px; }
+    .name{ font-size: 22px; }
+    .total{ font-size: 26px; }
+    .pill{ padding: 8px 12px; }
+  }
+
+  /* =========================================================
+     A) Accent kleuren consistent met WhatsApp theme
+     B) Pills/chips consistent + betere leesbaarheid
+     C) Card polish: spacing + tap feedback
+     (Overrides placed at end so they win over earlier CSS)
+  ========================================================= */
+
+  :root{
+    /* WhatsApp-ish accents */
+    --wa-green:#128C7E;
+    --wa-green-2:#25D366;
+    --wa-bg:#e6f6ef;
+    --wa-card:#ffffff;
+    --wa-line:#d7efe6;
+    --wa-text:#0b1f1b;
+    --wa-muted:#5a6b65;
+
+    /* Status accents */
+    --st-open: var(--wa-green-2);
+    --st-closed: var(--wa-green);
+    --st-delivered: var(--wa-green);
+    --st-cancelled:#ef4444;
+    --st-unknown:#94a3b8;
+  }
+
+  body{ background: var(--wa-bg); color: var(--wa-text); }
+
+  /* Card container spacing on mobile */
+  .wrap{ padding: 0 14px 18px; }
+
+  /* A) Card accent bar uses theme colors */
+  .card{
+    background: var(--wa-card);
+    border-color: rgba(18,140,126,.18);
+    box-shadow: 0 10px 24px rgba(16,24,40,.08);
+  }
+  .card::before{ background: var(--st-unknown); }
+  .card[data-status="open"]::before{ background: var(--st-open); }
+  .card[data-status="closed"]::before,
+  .card[data-status="delivered"]::before,
+  .card[data-status="pickedup"]::before{ background: var(--st-closed); }
+  .card[data-status="cancelled"]::before{ background: var(--st-cancelled); }
+
+  /* subtle tinted edge to tie accent into card */
+  .card[data-status="open"]{ box-shadow: 0 10px 24px rgba(37,211,102,.10); }
+  .card[data-status="cancelled"]{ box-shadow: 0 10px 24px rgba(239,68,68,.10); }
+
+  /* C) Tap feedback */
+  .card{ transition: transform .06s ease, box-shadow .12s ease; }
+  .card:active{ transform: translateY(1px) scale(.995); }
+
+  /* C) Make the top rows feel tighter and more "chat"-like */
+  .ordno{ letter-spacing: .2px; }
+  .total{ letter-spacing: .2px; }
+  .createdAt{ color: var(--wa-muted); }
+  .name{ color: var(--wa-text); }
+
+  /* B) Pills/chips: unified radius + borders + status colors */
+  .pill{
+    border-color: rgba(18,140,126,.18);
+    background: rgba(18,140,126,.06);
+    color: var(--wa-text);
+  }
+  .pill.ok{ border-color: rgba(37,211,102,.28); background: rgba(37,211,102,.12); }
+  .pill.warn{ border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.10); }
+  .pill.bad{ border-color: rgba(239,68,68,.28); background: rgba(239,68,68,.10); }
+
+  /* Status pill driven by data-status for consistency */
+  .card[data-status="open"] .pill.status{ border-color: rgba(37,211,102,.30); background: rgba(37,211,102,.12); }
+  .card[data-status="closed"] .pill.status,
+  .card[data-status="delivered"] .pill.status,
+  .card[data-status="pickedup"] .pill.status{ border-color: rgba(18,140,126,.30); background: rgba(18,140,126,.10); }
+  .card[data-status="cancelled"] .pill.status{ border-color: rgba(239,68,68,.30); background: rgba(239,68,68,.10); }
+
+  /* Slightly smaller pills on mobile to reduce wrapping */
+  @media (max-width: 520px){
+    .pill{ font-size:12px; padding:6px 10px; }
+    .pills{ gap:8px; }
+  }
+
+  /* Ensure header/tabs remain above cards while scrolling */
+  header{ z-index: 50; }
+  .tabs{ z-index: 49; }
+
+  </style>
 </head>
 <body>
   <header>
@@ -351,6 +952,8 @@
 <script>
   // --- Basic state ---
   const LS_KEY = "pq_api_base_v1";
+  const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
+
   let currentTab = "open";
   let lastOrders = [];
 
@@ -436,6 +1039,18 @@
     span.textContent = text;
     return span;
   }
+  function createWAPill_(sent) {
+    const span = document.createElement("span");
+    span.className = "pill wa " + (sent ? "ok" : "warn");
+    // Inline SVG icons to avoid external deps
+    const ico = sent
+      ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.2 4.9 11.9l1.4-1.4 2.9 2.9 8.6-8.6 1.4 1.4z"></path></svg>'
+      : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path></svg>';
+    span.innerHTML = ico + "<span>WA</span>";
+    span.title = sent ? "WhatsApp: Sent" : "WhatsApp: Not sent";
+    return span;
+  }
+
 
   function renderList(orders) {
     const list = document.getElementById("list");
@@ -443,8 +1058,8 @@
 
     if (!orders.length) {
       document.getElementById("hint").textContent = (currentTab === "open")
-        ? "Geen open orders."
-        : "Geen afgehandelde orders.";
+        ? "📭 Geen open orders. Gebruik de zoekbalk om een order te vinden."
+        : "✅ Geen afgehandelde orders in deze periode.";
       return;
     }
     document.getElementById("hint").textContent = "";
@@ -454,7 +1069,8 @@
       card.className = "card";
       // status key used for CSS accents
       const stKey = String(o.OrderStatus || "Open").trim().toLowerCase();
-      card.dataset.status = stKey || "open";
+      const statusKey = (stKey === "cancelled") ? "cancelled" : ((stKey === "" || stKey === "open") ? "open" : "closed");
+      card.dataset.status = statusKey;
       card.onclick = () => openOrder(o.OrderNumber);
 
       const head = document.createElement("div");
@@ -477,9 +1093,7 @@
       pills.className = "pills";
 
       // WA pill
-      pills.appendChild(
-        pill("WA: " + (o.WhatsAppSent ? "Sent" : "Not sent"), o.WhatsAppSent ? "ok" : "warn")
-      );
+      pills.appendChild(createWAPill_(!!o.WhatsAppSent));
 
       // Payment pill (phase1: minimal)
       const pay = (o.PaymentStatus || "").toString().trim();
@@ -529,37 +1143,36 @@
 
   function formatSRD(v) {
     const n = Number(v || 0);
-    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+    // No thousand separators (grouping) for SRD display
+    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
   }
 
   // Display CreatedAt as Suriname local time, without timezone label
   function formatDateDisplay_(s) {
+    // Returns: dd-mm-jjjj · hh:mm  (Suriname time, no timezone text)
     if (!s) return "";
     const raw = String(s).trim();
     if (!raw) return "";
     try {
-      // ISO-like
-      if (raw.includes("T")) {
+      // ISO-like (e.g. 2026-01-30T15:45:05.000Z)
+      if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
         const d = new Date(raw);
-        if (!isNaN(d.getTime())) {
-          return d.toLocaleString("nl-NL", {
-            timeZone: "America/Paramaribo",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
-          });
-        }
+        const date = d.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo" });
+        const time = d.toLocaleTimeString("nl-NL", { timeZone: "America/Paramaribo", hour: "2-digit", minute: "2-digit" });
+        return `${date} · ${time}`;
       }
-      // "YYYY-MM-DD HH:mm(:ss)" or "YYYY-MM-DDTHH:mm"
-      const m = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-      if (m) return m[1] + " " + m[2];
+
+      // If it's already like "dd-mm-jjjj hh:mm" or "dd-mm-jjjj, hh:mm"
+      const m = raw.match(/^(\d{2}-\d{2}-\d{4})[\s,]+(\d{2}:\d{2})/);
+      if (m) return `${m[1]} · ${m[2]}`;
+
+      // Last resort: return raw as-is
       return raw;
     } catch (e) {
       return raw;
     }
   }
+
 
 
   function escapeHtml(s) {
@@ -569,6 +1182,7 @@
   }
 
   function setDebug_(msg) {
+    if (!DEBUG) { const el = document.getElementById("debugInfo"); if (el) el.textContent = ""; return; }
     const el = document.getElementById("debugInfo");
     if (el) el.textContent = msg || "";
   }
