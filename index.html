@@ -17,10 +17,61 @@
     .tabs { display:flex; gap:8px; padding:12px 14px; }
     .tab { padding:8px 10px; border-radius:999px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:700; }
     .tab.active { background:#111; color:#fff; border-color:#111; }
-    .wrap { padding: 0 14px 18px; }
+    
+    /* Badges + loading spinner */
+    .badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 6px;
+      border-radius:999px; font-size:12px; font-weight:800; background:#f1f2f4; color:#111; border:1px solid #e1e3e6; margin-left:8px; }
+    .tab.active .badge { background:rgba(255,255,255,.18); color:#fff; border-color:rgba(255,255,255,.25); }
+
+    .spinner { width:14px; height:14px; margin-left:8px; border-radius:999px; border:2px solid rgba(0,0,0,.15); border-top-color: rgba(0,0,0,.55);
+      display:none; animation: spin 0.8s linear infinite; }
+    .btn.loading .spinner { display:inline-block; }
+    .btn.loading { opacity:.75; cursor:progress; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+.wrap { padding: 0 14px 18px; }
     .grid { display:grid; grid-template-columns:1fr; gap:10px; }
     .card { background:#fff; border:1px solid #e6e6e6; border-radius:14px; padding:12px; cursor:pointer; }
+
+    /* Card status accents */
+    .card { position: relative; overflow: hidden; }
+    .card::before {
+      content:"";
+      position:absolute; left:0; top:0; bottom:0;
+      width:4px;
+      background:#d1d5db;
+    }
+    .card[data-status="open"]::before { background:#2563eb; }
+    .card[data-status="closed"]::before { background:#16a34a; }
+    .card[data-status="delivered"]::before { background:#16a34a; }
+    .card[data-status="pickedup"]::before { background:#16a34a; }
+    .card[data-status="cancelled"]::before { background:#dc2626; }
+
+    .card[data-status="cancelled"]{ background:#fff7f7; border-color:#ffd6d6; }
+    .card[data-status="closed"],
+    .card[data-status="delivered"],
+    .card[data-status="pickedup"]{ background:#f6fffa; border-color:#c9f3da; }
+
+    /* Slightly tighter typography on mobile */
+    @media (max-width: 520px){
+      .card { padding: 10px; border-radius: 14px; }
+      .ordno { font-size: 14px; }
+      .total { font-size: 14px; }
+      .name { font-size: 13px; }
+      .cardDt { font-size: 12px; }
+      .pills { gap:6px; }
+      .pill { font-size: 11px; padding:3px 7px; }
+    }
     .topline { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+
+    /* Card header layout (Option D compact) */
+    .cardHead { display:flex; flex-direction:column; gap:4px; }
+    .cardRow1 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .cardRow2 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .cardDt { white-space:nowrap; }
+    @media (max-width: 480px) {
+      .cardRow2 { gap:8px; }
+      .cardDt { font-size:11px; }
+    }
     .ordno { font-weight:900; }
     .name { font-weight:700; margin-top:4px; }
     .total { font-weight:900; }
@@ -104,6 +155,88 @@
   .pickCb { width: 20px; height: 20px; margin-top: 2px; }
 }
 
+
+    /* --- Mobile compact card layout (Option D) --- */
+    @media (max-width: 520px) {
+      header { padding: 10px 12px; gap: 8px; }
+      .tabs { padding: 10px 12px; gap: 6px; }
+      .wrap { padding: 0 12px 14px; }
+
+      .card { padding: 10px; border-radius: 14px; }
+      .topline { display: flex; flex-direction: column; gap: 6px; }
+
+      /* Line 1: Order + Customer in one compact line */
+      .leftCol { line-height: 1.2; }
+      .leftCol .ordno { display: inline; font-size: 14px; }
+      .leftCol .name { display: inline; font-size: 14px; margin-top: 0; font-weight: 700; }
+      .leftCol .name:before { content: "  "; }
+
+      /* Line 2: Amount + Date on one line */
+      .rightCol { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+      .rightCol .total { font-size: 14px; font-weight: 900; }
+      .rightCol .muted { font-size: 12px; }
+
+      /* Pills become compact badges */
+      .pills { margin-top: 8px; gap: 6px; }
+      .pill { font-size: 11px; padding: 3px 7px; border-radius: 999px; }
+    }
+
+
+    /* --- Step 5: Mobile polish (CSS-only) --- */
+    /* Safer layering: modals must always sit above cards on mobile */
+    .modalBackdrop { z-index: 1000; }
+    .sheet { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+
+    /* Better tap feedback */
+    .card:active { transform: translateY(1px); }
+
+    /* Mobile-first refinements */
+    @media (max-width: 520px) {
+      body { background:#f4f6f8; }
+      header {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+      header h1 { font-size: 18px; }
+      /* Make right side less cramped */
+      #buildInfo { font-size: 11px; line-height: 1.2; }
+
+      .btn {
+        padding: 9px 12px;
+        border-radius: 12px;
+      }
+
+      .tabs { padding: 10px 12px; gap: 10px; }
+      .tab { padding: 10px 14px; border-radius: 999px; }
+
+      .wrap { padding: 0 12px 18px; }
+      .grid { gap: 12px; }
+
+      .card {
+        border-radius: 18px;
+        padding: 12px;
+        border-color: rgba(0,0,0,.08);
+        box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 10px 24px rgba(0,0,0,.05);
+      }
+
+      /* Keep the top line readable */
+      .ordno { font-size: 20px; letter-spacing: .2px; }
+      .total { font-size: 20px; }
+      .name { font-size: 18px; line-height: 1.15; }
+
+      /* Prevent long names from breaking layout */
+      .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* If you prefer 2 lines instead, swap to:
+         .name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:normal; }
+      */
+
+      .pills { gap: 6px; margin-top: 10px; }
+      .pill { padding: 6px 10px; font-size: 12px; }
+
+      /* Reduce visual noise for hint/debug line */
+      #hint { font-size: 12px; color: #7a7a7a; }
+    }
+
 </style>
 </head>
 <body>
@@ -113,12 +246,12 @@
     <input class="input" id="searchBox" placeholder="Zoek order of klant…" style="width:240px;max-width:46vw;" />
     <span class="muted" id="buildInfo">not connected</span>
     <button class="btn" id="btnSettings">Settings</button>
-    <button class="btn" id="btnRefresh">Refresh</button>
+    <button class="btn" id="btnRefresh"><span class="btnLabel">Refresh</span><span class="spinner" aria-hidden="true"></span></button>
   </header>
 
   <div class="tabs">
-    <button class="tab active" data-tab="open" id="tabOpen">Open orders</button>
-    <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld</button>
+    <button class="tab active" data-tab="open" id="tabOpen">Open orders<span class="badge" id="badgeOpen">0</span></button>
+    <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld<span class="badge" id="badgeClosed">0</span></button>
   </div>
 
   <div class="wrap">
@@ -220,6 +353,21 @@
   const LS_KEY = "pq_api_base_v1";
   let currentTab = "open";
   let lastOrders = [];
+
+  const tabCountCache = { open: null, closed: null };
+
+  async function refreshTabCount_(tab) {
+    try {
+      const action = tab === "open" ? "getOpenOrders" : "getClosedOrders";
+      const res = await api(action);
+      if (!res || !res.ok) return;
+      const count = Array.isArray(res.orders) ? res.orders.length : 0;
+      tabCountCache[tab] = count;
+      updateTabBadge_(tab, count);
+    } catch (e) {
+      // ignore
+    }
+  }
   let searchQuery = "";
 
   function getApiBase() {
@@ -304,21 +452,26 @@
     orders.forEach(o => {
       const card = document.createElement("div");
       card.className = "card";
+      // status key used for CSS accents
+      const stKey = String(o.OrderStatus || "Open").trim().toLowerCase();
+      card.dataset.status = stKey || "open";
       card.onclick = () => openOrder(o.OrderNumber);
 
-      const top = document.createElement("div");
-      top.className = "topline";
+      const head = document.createElement("div");
+      head.className = "cardHead";
 
-      const left = document.createElement("div");
-      left.innerHTML = `<div class="ordno">${escapeHtml(o.OrderNumber || "")}</div>
-                        <div class="name">${escapeHtml(o.CustomerName || "")}</div>`;
+      const createdDisp = formatDateDisplay_(o.CreatedAt || "");
 
-      const right = document.createElement("div");
-      right.innerHTML = `<div class="total">${formatSRD(o.OrderTotalSRD)}</div>
-                         <div class="muted">${escapeHtml(o.CreatedAt || "")}</div>`;
-
-      top.appendChild(left);
-      top.appendChild(right);
+      head.innerHTML = `
+        <div class="cardRow1">
+          <div class="ordno">${escapeHtml(o.OrderNumber || "")}</div>
+          <div class="total">${formatSRD(o.OrderTotalSRD)}</div>
+        </div>
+        <div class="cardRow2">
+          <div class="name">${escapeHtml(o.CustomerName || "")}</div>
+          <div class="muted cardDt">${escapeHtml(createdDisp)}</div>
+        </div>
+      `;
 
       const pills = document.createElement("div");
       pills.className = "pills";
@@ -334,13 +487,13 @@
         pill("Pay: " + (pay ? pay : "—"), pay === "Paid" ? "ok" : (pay === "Unpaid" ? "warn" : ""))
       );
 
-      // Status pill (open tab can show Open; closed tab shows actual)
+      // Status pill
       const st = (o.OrderStatus || "Open").toString().trim() || "Open";
       pills.appendChild(
-        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" ? "ok" : ""))
+        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" || st === "Delivered" || st === "PickedUp" ? "ok" : ""))
       );
 
-      card.appendChild(top);
+      card.appendChild(head);
       card.appendChild(pills);
       list.appendChild(card);
     });
@@ -378,6 +531,36 @@
     const n = Number(v || 0);
     return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
   }
+
+  // Display CreatedAt as Suriname local time, without timezone label
+  function formatDateDisplay_(s) {
+    if (!s) return "";
+    const raw = String(s).trim();
+    if (!raw) return "";
+    try {
+      // ISO-like
+      if (raw.includes("T")) {
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleString("nl-NL", {
+            timeZone: "America/Paramaribo",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+        }
+      }
+      // "YYYY-MM-DD HH:mm(:ss)" or "YYYY-MM-DDTHH:mm"
+      const m = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+      if (m) return m[1] + " " + m[2];
+      return raw;
+    } catch (e) {
+      return raw;
+    }
+  }
+
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, m => ({
@@ -420,6 +603,12 @@ async function loadOrders() {
 
     // Server already returns the right list for each tab.
     lastOrders = sortNewestFirst_(res.orders || []);
+    tabCountCache[currentTab] = lastOrders.length;
+    updateTabBadge_(currentTab, lastOrders.length);
+
+    // Keep the other tab badge in sync (background)
+    const otherTab = currentTab === "open" ? "closed" : "open";
+    if (tabCountCache[otherTab] === null) refreshTabCount_(otherTab);
     setDebug_(`tab=${currentTab} • total=${lastOrders.length} • q="${searchQuery}"`);
     renderList(filterOrders_(lastOrders));
 
@@ -434,7 +623,16 @@ async function loadOrders() {
     if (openBtn) openBtn.classList.toggle("active", currentTab === "open");
     if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
     // keep existing list but apply filter immediately for instant feedback
-    renderList(lastOrders || []);
+    renderList(filterOrders_(lastOrders || []));
+  }
+
+  function updateTabBadge_(tab, count) {
+    try {
+      const t = (tab === "closed") ? "closed" : "open";
+      const n = (typeof count === "number") ? count : 0;
+      const el = document.getElementById(t === "open" ? "badgeOpen" : "badgeClosed");
+      if (el) el.textContent = String(n);
+    } catch (e) {}
   }
 
 
@@ -579,6 +777,8 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     setApiBase(document.getElementById("apiBase").value);
     await loadBuildInfo();
     await safeLoadOrders();
+    refreshTabCount_("open");
+    refreshTabCount_("closed");
     setupWhatsAppButtons();
     settingsModal.classList.remove("show");
   };
@@ -663,13 +863,19 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
   document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); setTab("open"); safeLoadOrders(); });
   document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); setTab("closed"); safeLoadOrders(); });
 
-  document.getElementById("btnRefresh").onclick = async () => safeLoadOrders();
+  document.getElementById("btnRefresh").onclick = async () => { await safeLoadOrders(); refreshTabCount_("open"); refreshTabCount_("closed"); };
 
   async function safeLoadOrders() {
+    const btn = document.getElementById("btnRefresh");
+    if (btn) { btn.classList.add("loading"); btn.disabled = true; }
     try { await loadOrders(); }
     catch (e) {
       document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
       document.getElementById("list").innerHTML = "";
+    }
+    finally {
+      const btn2 = document.getElementById("btnRefresh");
+      if (btn2) { btn2.classList.remove("loading"); btn2.disabled = false; }
     }
   }
 
@@ -1074,6 +1280,8 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         currentOrder.WhatsAppSent = newVal;
         setWAUI(currentOrder);
         await safeLoadOrders();
+    refreshTabCount_("open");
+    refreshTabCount_("closed");
         result.textContent = `WhatsApp status gewijzigd (${newVal ? "Sent" : "Not sent"})`;
       } catch (e) {
         result.textContent = "Fout: " + (e.message || String(e));
@@ -1093,6 +1301,8 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     }
     await loadBuildInfo();
     await safeLoadOrders();
+    refreshTabCount_("open");
+    refreshTabCount_("closed");
     setupWhatsAppButtons();
     if (!getApiBase()) {
       document.getElementById("hint").textContent = "Open Settings en plak je Apps Script /exec URL.";
