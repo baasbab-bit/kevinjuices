@@ -42,7 +42,7 @@
       border-bottom-color: var(--wa-green, #128C7E);
       background:transparent;
     }
-    
+
     /* Badges + loading spinner */
     .badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 6px;
       border-radius:999px; font-size:12px; font-weight:800; background:#f1f2f4; color:#111; border:1px solid #e1e3e6; margin-left:8px; }
@@ -110,7 +110,7 @@
     .pill.warn { border-color:#ffe2a8; background:#fff8e8; }
     .pill.bad { border-color:#ffb5b5; background:#fff0f0; }
 
-    
+
     /* WA pill icons */
     .pill.wa { display:inline-flex; align-items:center; gap:6px; }
     .pill.wa .ico { width:14px; height:14px; display:inline-block; }
@@ -262,9 +262,6 @@
 
       /* Prevent long names from breaking layout */
       .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      /* If you prefer 2 lines instead, swap to:
-         .name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:normal; }
-      */
 
       .pills { gap: 6px; margin-top: 10px; }
       .pill { padding: 6px 10px; font-size: 12px; }
@@ -272,270 +269,6 @@
       /* Reduce visual noise for hint/debug line */
       #hint { font-size: 12px; color: #7a7a7a; }
     }
-
-
-/* --- Visual polish (v7.1) --- */
-:root{
-  --bg: #f6f7f9;
-  --card: #ffffff;
-  --text: #111;
-  --muted: #667085;
-  --border: #e6e6e6;
-  --shadow: 0 6px 18px rgba(16,24,40,.08);
-  --shadow2: 0 2px 8px rgba(16,24,40,.06);
-
-  --c-open: #2563eb;        /* blue */
-  --c-closed: #16a34a;      /* green */
-  --c-cancelled: #dc2626;   /* red */
-}
-
-body{
-  background: radial-gradient(1200px 600px at 20% -10%, rgba(37,99,235,.10), transparent 55%),
-              radial-gradient(1000px 520px at 95% 0%, rgba(22,163,74,.10), transparent 55%),
-              var(--bg);
-  color: var(--text);
-}
-
-.muted{ color: var(--muted); }
-
-header{
-  background: rgba(255,255,255,.92);
-  backdrop-filter: blur(8px);
-}
-
-.card{
-  background: var(--card);
-  box-shadow: var(--shadow2);
-  border-color: rgba(15,23,42,.10);
-  position: relative;
-  overflow: hidden;
-}
-
-.card:active{ transform: translateY(1px); }
-
-.card::before{
-  content:"";
-  position:absolute;
-  left:0; top:0; bottom:0;
-  width:4px;
-  background: rgba(2,6,23,.18);
-}
-
-.card[data-status="open"]::before{ background: var(--c-open); }
-.card[data-status="closed"]::before{ background: var(--c-closed); }
-.card[data-status="cancelled"]::before{ background: var(--c-cancelled); }
-
-.cardHead{ padding-left: 6px; } /* small visual alignment with status bar */
-
-.total{
-  letter-spacing: .2px;
-}
-
-/* Pills slightly more modern */
-.pill{
-  border-color: rgba(15,23,42,.10);
-  background: rgba(2,6,23,.02);
-}
-.pill.ok{ border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.08); }
-.pill.warn{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10); }
-.pill.bad{ border-color: rgba(220,38,38,.35); background: rgba(220,38,38,.08); }
-
-/* Tabs: small color cue */
-.tab.active{
-  box-shadow: 0 6px 14px rgba(17,24,39,.18);
-}
-
-
-/* === WhatsApp vibe header + tabs (CSS-only) === */
-:root{
-  --wa-green:#075E54;
-  --wa-green2:#128C7E;
-  --wa-mint:#DCF8C6;
-  --wa-surface:#F0FDF4;
-}
-header{
-  background: linear-gradient(90deg, var(--wa-green), var(--wa-green2));
-  border-bottom: 0;
-  box-shadow: 0 6px 18px rgba(0,0,0,.10);
-  color:#fff;
-}
-header h1{ color:#fff; }
-header .muted{ color: rgba(255,255,255,.85); }
-header .btn{
-  background: rgba(255,255,255,.14);
-  border-color: rgba(255,255,255,.28);
-  color:#fff;
-}
-header .btn:hover{ background: rgba(255,255,255,.18); }
-header .btn:active{ transform: translateY(1px); }
-
-header .input{
-  background: rgba(255,255,255,.16);
-  border-color: rgba(255,255,255,.28);
-  color:#fff;
-}
-header .input::placeholder{ color: rgba(255,255,255,.72); }
-
-/* Tabs look more "app-like" */
-.tabs{
-  background: var(--wa-surface);
-  border-bottom: 1px solid rgba(7,94,84,.10);
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-.tab{
-  border-color: rgba(7,94,84,.20);
-  background:#fff;
-  color: var(--wa-green);
-}
-.tab .badge{
-  background: rgba(7,94,84,.10);
-  color: var(--wa-green);
-  border-color: rgba(7,94,84,.18);
-}
-.tab.active{
-  background: var(--wa-green2);
-  border-color: var(--wa-green2);
-  color:#fff;
-}
-.tab.active .badge{
-  background: rgba(255,255,255,.20);
-  color:#fff;
-  border-color: rgba(255,255,255,.26);
-}
-
-/* Slight mint hint behind list (subtle WhatsApp feel) */
-.wrap{
-  background: linear-gradient(180deg, rgba(220,248,198,.22), rgba(246,247,249,0) 140px);
-}
-
-
-
-/* ===== WhatsApp vibe cohesive theme (CSS-only) ===== */
-:root{
-  --wa-green:#25D366;
-  --wa-green-dark:#1DA851;
-  --wa-teal:#075E54;
-  --wa-bg:#EAF7F1;          /* chat background */
-  --wa-surface:#FFFFFF;     /* cards/sheets */
-  --wa-border:#D7EBDD;
-  --wa-text:#0B1F16;
-  --wa-muted:#5E6C64;
-  --wa-pill:#F3FAF6;
-  --wa-shadow: 0 6px 18px rgba(11,31,22,.08);
-  --wa-shadow-soft: 0 3px 12px rgba(11,31,22,.06);
-}
-
-/* Page */
-body{
-  background: var(--wa-bg);
-  color: var(--wa-text);
-}
-.muted{ color: var(--wa-muted); }
-
-/* Header + search */
-header{
-  background: linear-gradient(180deg, rgba(37,211,102,.14), rgba(37,211,102,.06) 55%, rgba(255,255,255,1));
-  border-bottom: 1px solid var(--wa-border);
-  box-shadow: var(--wa-shadow-soft);
-}
-header h1{ color: var(--wa-text); letter-spacing:.2px; }
-.input{
-  border-color: var(--wa-border);
-  background: rgba(255,255,255,.92);
-}
-.input:focus{
-  outline: none;
-  border-color: rgba(37,211,102,.55);
-  box-shadow: 0 0 0 3px rgba(37,211,102,.18);
-}
-
-/* Buttons */
-.btn, .close{
-  border-color: var(--wa-border);
-  background: rgba(255,255,255,.92);
-}
-.btn:hover, .close:hover{ filter: brightness(.99); }
-.btn:active, .close:active{ transform: translateY(1px); }
-.btnPrimary{
-  background: var(--wa-green);
-  border-color: var(--wa-green);
-  color: #fff;
-}
-.btnPrimary:hover{ background: var(--wa-green-dark); border-color: var(--wa-green-dark); }
-
-/* Tabs */
-.tabs{
-  background: var(--wa-bg);
-}
-.tab{
-  border-color: var(--wa-border);
-  background: rgba(255,255,255,.82);
-}
-.tab.active{
-  background: var(--wa-teal);
-  border-color: var(--wa-teal);
-  color: #fff;
-  box-shadow: 0 10px 18px rgba(7,94,84,.18);
-}
-
-/* Cards */
-.card{
-  background: var(--wa-surface);
-  border-color: var(--wa-border);
-  box-shadow: var(--wa-shadow-soft);
-}
-.card:active{ transform: translateY(1px); }
-
-/* Topline typography tweaks */
-.ordno{ color: var(--wa-text); }
-.total{ color: var(--wa-text); }
-
-/* Pills */
-.pill{
-  border-color: var(--wa-border);
-  background: var(--wa-pill);
-  color: var(--wa-text);
-}
-.pill.ok{
-  border-color: rgba(37,211,102,.35);
-  background: rgba(37,211,102,.12);
-}
-.pill.warn{
-  border-color: rgba(255,193,7,.40);
-  background: rgba(255,193,7,.14);
-}
-.pill.bad{
-  border-color: rgba(231,76,60,.35);
-  background: rgba(231,76,60,.12);
-}
-
-/* Modal */
-.modalBackdrop{
-  background: rgba(6,25,18,.55);
-}
-.sheet{
-  background: var(--wa-surface);
-  border-top: 1px solid var(--wa-border);
-  box-shadow: 0 -10px 22px rgba(11,31,22,.16);
-}
-.sec{ border-top-color: rgba(0,0,0,.06); }
-.kv{ color: var(--wa-text); }
-.kv .muted{ color: var(--wa-muted); }
-.item{
-  border-color: rgba(0,0,0,.06);
-  background: rgba(255,255,255,.9);
-}
-.thumb{ background: rgba(0,0,0,.04); }
-
-/* Small accent line under header area (optional visual separation) */
-.wrap{ padding-top: 10px; }
-
-/* Make checkboxes and focus states feel consistent */
-.pickCb{
-  accent-color: var(--wa-green);
-}
-
 
 /* ===== WhatsApp theme readability hotfix (override) ===== */
 header{
@@ -589,7 +322,6 @@ header .input::placeholder,
   border-color: #25D366 !important;
   color:#0b2b22 !important;
 }
-
 
 /* === WhatsApp vibe: card theme (readable) === */
 :root{
@@ -676,164 +408,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   .pill{ font-size:12px; padding:5px 10px; }
 }
 
-  /* =========================================================
-     A) Accent kleuren consistent met WhatsApp theme
-     B) Pills/chips consistent + betere leesbaarheid
-     C) Card polish: spacing + tap feedback
-     (Overrides placed at end so they win over earlier CSS)
-  ========================================================== */
-
-  :root{
-    /* WhatsApp-ish status accents */
-    --c-open: #25D366;      /* WhatsApp green */
-    --c-closed: #128C7E;    /* WhatsApp teal */
-    --c-delivered: #128C7E;
-    --c-pickedup: #0f766e;
-    --c-cancelled: #ef4444;
-    --c-unknown: #94a3b8;
-  }
-
-  /* A) status -> accent kleur (bar + subtiele tint) */
-  .card{ 
-    background: #fff;
-    border: 1px solid rgba(15, 23, 42, .10);
-    box-shadow: 0 10px 24px rgba(2, 6, 23, .06);
-    transition: transform .08s ease, box-shadow .12s ease;
-  }
-  .card:active{ transform: translateY(1px); box-shadow: 0 6px 16px rgba(2, 6, 23, .08); }
-  .card::before{ width: 6px; border-radius: 14px 0 0 14px; }
-
-  .card[data-status="open"]{ --accent: var(--c-open); }
-  .card[data-status=""]{ --accent: var(--c-open); }
-  .card[data-status="closed"]{ --accent: var(--c-closed); }
-  .card[data-status="delivered"]{ --accent: var(--c-delivered); }
-  .card[data-status="pickedup"]{ --accent: var(--c-pickedup); }
-  .card[data-status="cancelled"]{ --accent: var(--c-cancelled); }
-  .card[data-status]:not([data-status="open"]):not([data-status=""]):not([data-status="closed"]):not([data-status="delivered"]):not([data-status="pickedup"]):not([data-status="cancelled"]) {
-    --accent: var(--c-unknown);
-  }
-
-  /* subtiele accent glow, maar leesbaar houden */
-  .card{ position: relative; overflow: hidden; }
-  .card::after{
-    content:"";
-    position:absolute;
-    inset: 0;
-    background: radial-gradient(900px 180px at -10% 0%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 55%);
-    pointer-events:none;
-  }
-
-  /* C) Layout: netter gebruik van ruimte */
-  .topline{ align-items: flex-start; }
-  .ordno{ font-size: 22px; font-weight: 800; letter-spacing: .15px; }
-  .name{ font-size: 24px; font-weight: 900; line-height: 1.12; }
-  .total{ font-size: 24px; font-weight: 900; }
-  .muted{ color: rgba(255,255,255,.85); }
-  /* Maar binnen kaarten willen we donker muted */
-  .card .muted{ color: rgba(15,23,42,.55); }
-
-  /* B) Pills: whatsapp-like chips, consistent spacing */
-  .pills{ gap:10px; }
-  .pill{
-    padding: 8px 12px;
-    border-radius: 999px;
-    border-color: rgba(15,23,42,.12);
-    background: rgba(248,250,252,.9);
-    font-weight: 700;
-  }
-  .pill.ok{ border-color: color-mix(in srgb, var(--c-open) 32%, rgba(15,23,42,.12)); background: color-mix(in srgb, var(--c-open) 12%, #fff); }
-  .pill.warn{ border-color: color-mix(in srgb, #f59e0b 34%, rgba(15,23,42,.12)); background: color-mix(in srgb, #f59e0b 12%, #fff); }
-  .pill.bad{ border-color: color-mix(in srgb, var(--c-cancelled) 34%, rgba(15,23,42,.12)); background: color-mix(in srgb, var(--c-cancelled) 10%, #fff); }
-
-  /* Mobile: iets compacter, betere tik targets */
-  @media (max-width: 520px){
-    .card{ padding: 14px; }
-    .ordno{ font-size: 26px; }
-    .name{ font-size: 22px; }
-    .total{ font-size: 26px; }
-    .pill{ padding: 8px 12px; }
-  }
-
-  /* =========================================================
-     A) Accent kleuren consistent met WhatsApp theme
-     B) Pills/chips consistent + betere leesbaarheid
-     C) Card polish: spacing + tap feedback
-     (Overrides placed at end so they win over earlier CSS)
-  ========================================================= */
-
-  :root{
-    /* WhatsApp-ish accents */
-    --wa-green:#128C7E;
-    --wa-green-2:#25D366;
-    --wa-bg:#e6f6ef;
-    --wa-card:#ffffff;
-    --wa-line:#d7efe6;
-    --wa-text:#0b1f1b;
-    --wa-muted:#5a6b65;
-
-    /* Status accents */
-    --st-open: var(--wa-green-2);
-    --st-closed: var(--wa-green);
-    --st-delivered: var(--wa-green);
-    --st-cancelled:#ef4444;
-    --st-unknown:#94a3b8;
-  }
-
-  body{ background: var(--wa-bg); color: var(--wa-text); }
-
-  /* Card container spacing on mobile */
-  .wrap{ padding: 0 14px 18px; }
-
-  /* A) Card accent bar uses theme colors */
-  .card{
-    background: var(--wa-card);
-    border-color: rgba(18,140,126,.18);
-    box-shadow: 0 10px 24px rgba(16,24,40,.08);
-  }
-  .card::before{ background: var(--st-unknown); }
-  .card[data-status="open"]::before{ background: var(--st-open); }
-  .card[data-status="closed"]::before,
-  .card[data-status="delivered"]::before,
-  .card[data-status="pickedup"]::before{ background: var(--st-closed); }
-  .card[data-status="cancelled"]::before{ background: var(--st-cancelled); }
-
-  /* subtle tinted edge to tie accent into card */
-  .card[data-status="open"]{ box-shadow: 0 10px 24px rgba(37,211,102,.10); }
-  .card[data-status="cancelled"]{ box-shadow: 0 10px 24px rgba(239,68,68,.10); }
-
-  /* C) Tap feedback */
-  .card{ transition: transform .06s ease, box-shadow .12s ease; }
-  .card:active{ transform: translateY(1px) scale(.995); }
-
-  /* C) Make the top rows feel tighter and more "chat"-like */
-  .ordno{ letter-spacing: .2px; }
-  .total{ letter-spacing: .2px; }
-  .createdAt{ color: var(--wa-muted); }
-  .name{ color: var(--wa-text); }
-
-  /* B) Pills/chips: unified radius + borders + status colors */
-  .pill{
-    border-color: rgba(18,140,126,.18);
-    background: rgba(18,140,126,.06);
-    color: var(--wa-text);
-  }
-  .pill.ok{ border-color: rgba(37,211,102,.28); background: rgba(37,211,102,.12); }
-  .pill.warn{ border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.10); }
-  .pill.bad{ border-color: rgba(239,68,68,.28); background: rgba(239,68,68,.10); }
-
-  /* Status pill driven by data-status for consistency */
-  .card[data-status="open"] .pill.status{ border-color: rgba(37,211,102,.30); background: rgba(37,211,102,.12); }
-  .card[data-status="closed"] .pill.status,
-  .card[data-status="delivered"] .pill.status,
-  .card[data-status="pickedup"] .pill.status{ border-color: rgba(18,140,126,.30); background: rgba(18,140,126,.10); }
-  .card[data-status="cancelled"] .pill.status{ border-color: rgba(239,68,68,.30); background: rgba(239,68,68,.10); }
-
-  /* Slightly smaller pills on mobile to reduce wrapping */
-  @media (max-width: 520px){
-    .pill{ font-size:12px; padding:6px 10px; }
-    .pills{ gap:8px; }
-  }
-
   /* Ensure header/tabs remain above cards while scrolling */
   header{ z-index: 50; }
   .tabs{ z-index: 49; }
@@ -851,7 +425,8 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   </header>
 
   <div class="tabs">
-    <button class="tab active" data-tab="open" id="tabOpen">Open orders<span class="badge" id="badgeOpen">0</span></button>
+    <button class="tab active" data-tab="open" id="tabOpen">Open<span class="badge" id="badgeOpen">0</span></button>
+    <button class="tab" data-tab="ready" id="tabReady">Ready<span class="badge" id="badgeReady">0</span></button>
     <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld<span class="badge" id="badgeClosed">0</span></button>
   </div>
 
@@ -952,26 +527,51 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
 <script>
   // --- Basic state ---
   const LS_KEY = "pq_api_base_v1";
-  const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
+  const DEBUG = /(?:\\?|&)debug=1(?:&|$)/.test(location.search);
 
   let currentTab = "open";
   let lastOrders = [];
+  let openPool = []; // open orders from server (includes Open + Ready subsets)
+  let closedPool = []; // closed orders from server
+  let cacheOpen = null;
+  let cacheClosed = null;
 
-  const tabCountCache = { open: null, closed: null };
+  const tabCountCache = { open: null, ready: null, closed: null };
+  let searchQuery = "";
+
+  // Status buckets (Phase 1)
+  const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
+
+  function normStatus_(s){ return String(s || "").trim().toLowerCase(); }
+  function isClosedLike_(o){ return CLOSED_STATUSES.has(normStatus_(o && o.OrderStatus)); }
+  function isReady_(o){ return !!(o && o.WhatsAppSent) && !isClosedLike_(o); }
+  function isOpen_(o){ return !isClosedLike_(o) && !isReady_(o); }
 
   async function refreshTabCount_(tab) {
     try {
-      const action = tab === "open" ? "getOpenOrders" : "getClosedOrders";
-      const res = await api(action);
+      if (tab === "closed") {
+        const res = await api("getClosedOrders");
+        if (!res || !res.ok) return;
+        const count = Array.isArray(res.orders) ? res.orders.length : 0;
+        tabCountCache.closed = count;
+        updateTabBadge_("closed", count);
+        return;
+      }
+
+      // open/ready are derived from OPEN orders list (single call)
+      const res = await api("getOpenOrders");
       if (!res || !res.ok) return;
-      const count = Array.isArray(res.orders) ? res.orders.length : 0;
-      tabCountCache[tab] = count;
-      updateTabBadge_(tab, count);
+      const arr = Array.isArray(res.orders) ? res.orders : [];
+      const openCount = arr.filter(isOpen_).length;
+      const readyCount = arr.filter(isReady_).length;
+      tabCountCache.open = openCount;
+      tabCountCache.ready = readyCount;
+      updateTabBadge_("open", openCount);
+      updateTabBadge_("ready", readyCount);
     } catch (e) {
       // ignore
     }
   }
-  let searchQuery = "";
 
   function getApiBase() {
     return (localStorage.getItem(LS_KEY) || "").trim();
@@ -1023,7 +623,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     const u = new URL(base);
 
     // IMPORTANT: make sure we don't accidentally reuse old query params
-    // (e.g. a saved URL like .../exec?action=...&status=Cancelled)
     u.search = "";
     u.hash = "";
 
@@ -1042,7 +641,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   function createWAPill_(sent) {
     const span = document.createElement("span");
     span.className = "pill wa " + (sent ? "ok" : "warn");
-    // Inline SVG icons to avoid external deps
     const ico = sent
       ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 16.2 4.9 11.9l1.4-1.4 2.9 2.9 8.6-8.6 1.4 1.4z"></path></svg>'
       : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path></svg>';
@@ -1051,15 +649,15 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     return span;
   }
 
-
   function renderList(orders) {
     const list = document.getElementById("list");
     list.innerHTML = "";
 
     if (!orders.length) {
-      document.getElementById("hint").textContent = (currentTab === "open")
-        ? "📭 Geen open orders. Gebruik de zoekbalk om een order te vinden."
-        : "✅ Geen afgehandelde orders in deze periode.";
+      const hint = document.getElementById("hint");
+      if (currentTab === "open") hint.textContent = "📭 Geen open orders.";
+      else if (currentTab === "ready") hint.textContent = "📦 Geen orders in Ready.";
+      else hint.textContent = "✅ Geen afgehandelde orders in deze periode.";
       return;
     }
     document.getElementById("hint").textContent = "";
@@ -1067,8 +665,7 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     orders.forEach(o => {
       const card = document.createElement("div");
       card.className = "card";
-      // status key used for CSS accents
-      const stKey = String(o.OrderStatus || "Open").trim().toLowerCase();
+      const stKey = normStatus_(o.OrderStatus || "Open");
       const statusKey = (stKey === "cancelled") ? "cancelled" : ((stKey === "" || stKey === "open") ? "open" : "closed");
       card.dataset.status = statusKey;
       card.onclick = () => openOrder(o.OrderNumber);
@@ -1092,16 +689,13 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
       const pills = document.createElement("div");
       pills.className = "pills";
 
-      // WA pill
       pills.appendChild(createWAPill_(!!o.WhatsAppSent));
 
-      // Payment pill (phase1: minimal)
       const pay = (o.PaymentStatus || "").toString().trim();
       pills.appendChild(
         pill("Pay: " + (pay ? pay : "—"), pay === "Paid" ? "ok" : (pay === "Unpaid" ? "warn" : ""))
       );
 
-      // Status pill
       const st = (o.OrderStatus || "Open").toString().trim() || "Open";
       pills.appendChild(
         pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" || st === "Delivered" || st === "PickedUp" ? "ok" : ""))
@@ -1113,7 +707,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     });
   }
 
-
   function filterOrders_(orders) {
     const q = (searchQuery || "").trim().toLowerCase();
     if (!q) return orders || [];
@@ -1124,56 +717,51 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     });
   }
 
-  // Status buckets (Phase 1)
-  const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
-  const OPEN_STATUSES = new Set(["open","awaiting processing","processing","ready for pickup","shipped","out for delivery"]);
+  function getSearchBase_() {
+    const q = (searchQuery || "").trim();
+    if (!q) return (lastOrders || []);
+    if (currentTab === "closed") return (lastOrders || []);
+    // open/ready: search in BOTH open + ready (openPool = open orders from server)
+    if (openPool && openPool.length) return openPool;
+    if (typeof cacheOpen !== "undefined" && Array.isArray(cacheOpen) && cacheOpen.length) return sortNewestFirst_(cacheOpen);
+    return (lastOrders || []);
+  }
 
-  function filterByTabStatus_(orders) {
+  function renderCurrent_() {
+    renderList(filterOrders_(getSearchBase_()));
+  }
+
+
+  function filterByTab_(orders){
     const arr = Array.isArray(orders) ? orders : [];
-    const norm = (s) => String(s || "").trim().toLowerCase();
-
-    if (currentTab === "closed") {
-      // show ALL "closed-like" statuses, case-insensitive
-      return arr.filter(o => CLOSED_STATUSES.has(norm(o && o.OrderStatus)));
-    }
-
-    // open tab: anything NOT closed-like (keep new Ecwid statuses too)
-    return arr.filter(o => !CLOSED_STATUSES.has(norm(o && o.OrderStatus)));
+    if (currentTab === "closed") return arr;
+    if (currentTab === "ready") return arr.filter(isReady_);
+    return arr.filter(isOpen_); // open tab
   }
 
   function formatSRD(v) {
     const n = Number(v || 0);
-    // No thousand separators (grouping) for SRD display
     return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
   }
 
-  // Display CreatedAt as Suriname local time, without timezone label
   function formatDateDisplay_(s) {
-    // Returns: dd-mm-jjjj · hh:mm  (Suriname time, no timezone text)
     if (!s) return "";
     const raw = String(s).trim();
     if (!raw) return "";
     try {
-      // ISO-like (e.g. 2026-01-30T15:45:05.000Z)
-      if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+      if (/^\\d{4}-\\d{2}-\\d{2}T/.test(raw)) {
         const d = new Date(raw);
         const date = d.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo" });
         const time = d.toLocaleTimeString("nl-NL", { timeZone: "America/Paramaribo", hour: "2-digit", minute: "2-digit" });
         return `${date} · ${time}`;
       }
-
-      // If it's already like "dd-mm-jjjj hh:mm" or "dd-mm-jjjj, hh:mm"
-      const m = raw.match(/^(\d{2}-\d{2}-\d{4})[\s,]+(\d{2}:\d{2})/);
+      const m = raw.match(/^(\\d{2}-\\d{2}-\\d{4})[\\s,]+(\\d{2}:\\d{2})/);
       if (m) return `${m[1]} · ${m[2]}`;
-
-      // Last resort: return raw as-is
       return raw;
     } catch (e) {
       return raw;
     }
   }
-
-
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, m => ({
@@ -1201,73 +789,108 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     }
   }
 
-  
   function sortNewestFirst_(orders) {
     return (orders || []).slice().sort((a, b) => {
       const ta = Date.parse(a.CreatedAt || 0);
       const tb = Date.parse(b.CreatedAt || 0);
-      return tb - ta; // newest first
+      return tb - ta;
     });
   }
 
-async function loadOrders() {
-    const action = currentTab === "open" ? "getOpenOrders" : "getClosedOrders";
+  function updateAllBadgesFromOpenList_(openList){
+    const arr = Array.isArray(openList) ? openList : [];
+    const openCount = arr.filter(isOpen_).length;
+    const readyCount = arr.filter(isReady_).length;
+    tabCountCache.open = openCount;
+    tabCountCache.ready = readyCount;
+    updateTabBadge_("open", openCount);
+    updateTabBadge_("ready", readyCount);
+  }
+
+  async function loadOrders() {
+    const action = (currentTab === "closed") ? "getClosedOrders" : "getOpenOrders";
     const res = await api(action);
     if (!res || !res.ok) throw new Error((res && res.error) || "API error");
 
-    // Server already returns the right list for each tab.
-    lastOrders = sortNewestFirst_(res.orders || []);
+    // Cache pools (server returns: open = Open+Ready subsets, closed = Afgehandeld)
+    if (currentTab === "closed") {
+      cacheClosed = res.orders || [];
+      closedPool = sortNewestFirst_(cacheClosed);
+      lastOrders = closedPool;
+    } else {
+      cacheOpen = res.orders || [];
+      openPool = sortNewestFirst_(cacheOpen);
+      // For normal tab view, split openPool into Open vs Ready
+      lastOrders = filterByTab_(openPool);
+    }
+
     tabCountCache[currentTab] = lastOrders.length;
     updateTabBadge_(currentTab, lastOrders.length);
 
-    // Keep the other tab badge in sync (background)
-    const otherTab = currentTab === "open" ? "closed" : "open";
-    if (tabCountCache[otherTab] === null) refreshTabCount_(otherTab);
+    // Keep the other tab badges in sync (background)
+    const otherTabs = (currentTab === "closed")
+      ? ["open", "ready"]
+      : ["closed", (currentTab === "open" ? "ready" : "open")];
+
+    otherTabs.forEach(t => { if (tabCountCache[t] === null) refreshTabCount_(t); });
+
     setDebug_(`tab=${currentTab} • total=${lastOrders.length} • q="${searchQuery}"`);
-    renderList(filterOrders_(lastOrders));
+
+    // Search behavior:
+    // - Open/Ready tabs: search across Open+Ready (openPool)
+    // - Closed tab: search only within closed
+    renderCurrent_();
 
     prefetchTopDetails_(lastOrders);
   }
 
-  // Switch tabs (Open / Afgehandeld)
   function setTab(tab) {
-    currentTab = (tab === "closed") ? "closed" : "open";
+    const next = (tab === "closed" || tab === "ready") ? tab : "open";
+    currentTab = next;
+
     const openBtn = document.getElementById("tabOpen");
+    const readyBtn = document.getElementById("tabReady");
     const closedBtn = document.getElementById("tabClosed");
     if (openBtn) openBtn.classList.toggle("active", currentTab === "open");
+    if (readyBtn) readyBtn.classList.toggle("active", currentTab === "ready");
     if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
-    // keep existing list but apply filter immediately for instant feedback
-    renderList(filterOrders_(lastOrders || []));
+
+    // Instant feedback using cache when available
+    if (currentTab === "closed" && cacheClosed) {
+      lastOrders = cacheClosed;
+      renderCurrent_();
+    } else if ((currentTab === "open" || currentTab === "ready") && cacheOpen) {
+      lastOrders = filterByTab_(cacheOpen);
+      renderCurrent_();
+    }
   }
 
   function updateTabBadge_(tab, count) {
     try {
-      const t = (tab === "closed") ? "closed" : "open";
+      const t = (tab === "ready") ? "ready" : ((tab === "closed") ? "closed" : "open");
       const n = (typeof count === "number") ? count : 0;
-      const el = document.getElementById(t === "open" ? "badgeOpen" : "badgeClosed");
+      const id = (t === "open") ? "badgeOpen" : (t === "ready" ? "badgeReady" : "badgeClosed");
+      const el = document.getElementById(id);
       if (el) el.textContent = String(n);
     } catch (e) {}
   }
-
 
   // --- Order detail ---
   async function openOrder(orderNumber) {
     try {
       const modal = document.getElementById("orderModal");
       modal.classList.add("show");
-document.getElementById("odTitle").textContent = "Order " + orderNumber;
+      document.getElementById("odTitle").textContent = "Order " + orderNumber;
       document.getElementById("odKV").innerHTML = `<div class="muted">Loading</div><div>…</div>`;
       document.getElementById("odItems").innerHTML = "";
       document.getElementById("odItemsCount").textContent = "";
 
-      // Fast path: use cached order detail if available
       const cached = getCachedOrderDetail_(orderNumber);
       if (cached) {
         const oCached = cached;
         currentOrder = oCached;
         initPickState_(currentOrder);
 
-        // WhatsApp button starts disabled until message is prefetched
         const btnWA = document.getElementById("btnWhatsApp");
         if (btnWA) btnWA.disabled = true;
         setWAPrepText_("", false);
@@ -1276,11 +899,9 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         if (waResEl) waResEl.textContent = "";
         setWAPrepText_("", false);
 
-        // Render immediately from cache
         applyOrderToModal_(oCached);
         updateOrderActionsUI_();
 
-        // Prefetch WhatsApp message in background; enable button only when ready
         prefetchWAMsg(currentOrder.OrderNumber)
           .then(() => {
             if (currentOrder && currentOrder.OrderNumber === oCached.OrderNumber) {
@@ -1297,10 +918,8 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
             }
           });
 
-        // Refresh cache in background (won't block UI)
         prefetchOrderDetail_(orderNumber).then(fresh => {
           if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
-            // Update modal if still on same order
             initPickState_(fresh);
             applyOrderToModal_(fresh);
           }
@@ -1316,7 +935,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
       currentOrder = o;
       initPickState_(currentOrder);
 
-      // WhatsApp button starts disabled until message is prefetched
       const btnWA = document.getElementById("btnWhatsApp");
       if (btnWA) btnWA.disabled = true;
       setWAPrepText_("", false);
@@ -1324,7 +942,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
       const waResEl = document.getElementById("waResult");
       if (waResEl) waResEl.textContent = "";
       setWAPrepText_("", false);
-      // Prefetch WhatsApp message in background; enable button only when ready
+
       prefetchWAMsg(currentOrder.OrderNumber)
         .then(() => {
           if (currentOrder && currentOrder.OrderNumber === o.OrderNumber) {
@@ -1340,7 +958,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
             setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
           }
         });
-            // Cache and render
+
       setCachedOrderDetail_(o);
       applyOrderToModal_(o);
       updateOrderActionsUI_();
@@ -1365,7 +983,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     if (Array.isArray(options)) {
       return options.map(o => (o.name && o.value) ? `${o.name}: ${o.value}` : "").filter(Boolean).join(" · ");
     }
-    // sometimes options could be object
     if (typeof options === "object") {
       return Object.entries(options).map(([k,v]) => `${k}: ${v}`).join(" · ");
     }
@@ -1373,7 +990,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
   }
 
   function firstImageUrl(it) {
-    // Phase 1: minimal; true fallback chain comes later (thumb -> image -> alt list)
     return it.thumbUrl || it.imageUrl || (Array.isArray(it.altImageUrls) ? it.altImageUrls[0] : "") || "";
   }
 
@@ -1391,7 +1007,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     setApiBase(document.getElementById("apiBase").value);
     await loadBuildInfo();
     await safeLoadOrders();
-    refreshTabCount_("open");
+    refreshTabCount_("open"); // will refresh open+ready
     refreshTabCount_("closed");
     setupWhatsAppButtons();
     settingsModal.classList.remove("show");
@@ -1427,7 +1043,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
       btnDone.onclick = async () => {
         try {
           if (resultEl) resultEl.textContent = "";
-          // Guard: only allow when pick complete
           if (!currentOrder || !currentOrder.PickComplete) {
             if (resultEl) resultEl.textContent = "⚠️ Pick is nog niet compleet.";
             return;
@@ -1472,9 +1087,9 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     }
   })();
 
-
   // tabs
   document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); setTab("open"); safeLoadOrders(); });
+  document.getElementById("tabReady").addEventListener("click", (ev) => { ev.preventDefault(); setTab("ready"); safeLoadOrders(); });
   document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); setTab("closed"); safeLoadOrders(); });
 
   document.getElementById("btnRefresh").onclick = async () => { await safeLoadOrders(); refreshTabCount_("open"); refreshTabCount_("closed"); };
@@ -1493,7 +1108,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     }
   }
 
-  
   // --- WhatsApp state ---
   let currentOrder = null;
   const waMsgCache = new Map(); // orderNumber -> message
@@ -1526,8 +1140,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     updateOrderActionsUI_();
   }
 
-  
-  // --- Order status actions (v1 quick close) ---
   function updateOrderActionsUI_() {
     const hint = document.getElementById("odStatusHint");
     const btnDone = document.getElementById("btnMarkDone");
@@ -1569,14 +1181,14 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     currentOrder.OrderStatus = status;
     document.getElementById("odActionResult").textContent = `✅ Status bijgewerkt: ${status}`;
 
-    // Close modal + refresh lists
     setTimeout(() => {
       document.getElementById("orderModal").classList.remove("show");
       resetCancelUI_();
       loadOrders();
+      refreshTabCount_("open");
+      refreshTabCount_("closed");
     }, 250);
   }
-
 
   function scheduleSavePickChecks_() {
     if (!currentOrder) return;
@@ -1591,16 +1203,13 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         currentOrder.PickComplete = !!res.PickComplete;
         currentOrder.PickChecks = pickChecks;
         updatePickUI_();
-        // Optional: refresh list to show updated pills/status later
-        // await safeLoadOrders();
       } catch (e) {
-        const kv = document.getElementById("odKV");
-        // Don't break UI; show subtle error in WA result area (reuse existing spot)
         const waRes = document.getElementById("waResult");
         if (waRes) waRes.textContent = "Pick save error: " + (e.message || String(e));
       }
     }, 300);
   }
+
   // --- Order detail prefetch/cache ---
   const DETAIL_PREFETCH_LIMIT = 8;
   const detailCache = new Map(); // orderNumber -> orderDetailObject
@@ -1620,7 +1229,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
 
   function saveDetailCacheToSession_() {
     try {
-      // Keep it small: max 30 orders
       const entries = Array.from(detailCache.entries()).slice(0, 30);
       const obj = {};
       entries.forEach(([k,v]) => obj[k] = v);
@@ -1662,7 +1270,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         .map(o => String(o.OrderNumber || "").trim())
         .filter(Boolean);
 
-      // Fire and forget; don't await to keep UI snappy
       top.forEach(n => {
         if (detailCache.has(n)) return;
         prefetchOrderDetail_(n).catch(()=>{});
@@ -1678,7 +1285,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         if (it && it.thumbUrl) urls.push(it.thumbUrl);
         if (it && it.imageUrl) urls.push(it.imageUrl);
         if (it && Array.isArray(it.altImageUrls)) urls.push(...it.altImageUrls);
-        // Warm only first 2 per item to avoid too many requests
         urls.filter(Boolean).slice(0,2).forEach(u => { const img = new Image(); img.src = u; });
       });
     } catch (e) {}
@@ -1698,7 +1304,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
 
     const items = Array.isArray(o.Items) ? o.Items : [];
-    // sync pickChecks with current order/items
     pickChecks = normalizePickChecks_(items, o.PickChecks);
     if (currentOrder && String(currentOrder.OrderNumber||"") === String(o.OrderNumber||"")) {
       currentOrder.PickChecks = pickChecks;
@@ -1713,7 +1318,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
       const row = document.createElement("div");
       row.className = "item";
 
-      // Pick checkbox
       const pickWrap = document.createElement("div");
       pickWrap.className = "pickCol";
       const cb = document.createElement("input");
@@ -1722,7 +1326,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
       cb.checked = !!pickChecks[idx];
       cb.onchange = () => {
         pickChecks[idx] = !!cb.checked;
-        // optimistic local complete (UI only; server remains source of truth)
         currentOrder.PickChecks = pickChecks;
         scheduleSavePickChecks_();
       };
@@ -1756,7 +1359,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     warmImagesForOrder_(o);
   }
 
-
   function cacheGetWAMsg(orderNumber) {
     const key = String(orderNumber || "").trim();
     if (!key) return "";
@@ -1785,12 +1387,11 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     return String(mres.message || "");
   }
 
-  // Optional fallback if template missing server-side (should not happen in normal flow)
   function buildWhatsAppMessageFallback(order) {
     const name = order.CustomerName || "klant";
     const orderNo = order.OrderNumber || "";
     const total = formatSRD(order.OrderTotalSRD || 0);
-    return `Hi ${name}, we hebben je bestelling ${orderNo} ontvangen. Dank je wel! 🙏\nTotaal: ${total}\nTot straks 🤝`;
+    return `Hi ${name}, we hebben je bestelling ${orderNo} ontvangen. Dank je wel! 🙏\\nTotaal: ${total}\\nTot straks 🤝`;
   }
 
   function prefetchWAMsg(orderNumber) {
@@ -1817,7 +1418,6 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     el.textContent = order.WhatsAppSent ? "Sent ✅" : "Not sent ⚠️";
   }
 
-
   function setWAPrepText_(t, isError) {
     const el = document.getElementById("waPrep");
     if (!el) return;
@@ -1835,45 +1435,44 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     const btnToggle = document.getElementById("btnToggleWA");
     const result = document.getElementById("waResult");
     const prep = document.getElementById("waPrep");
-    const setPrep = (t) => { if (prep) prep.textContent = "Bericht: " + t; };
     if (!btnWA || !btnToggle || !result) return;
 
     btnWA.onclick = async () => {
       if (!currentOrder) return;
 
-      const phoneRaw = (currentOrder.CustomerPhone || "").replace(/\D/g, "");
+      const phoneRaw = (currentOrder.CustomerPhone || "").replace(/\\D/g, "");
       if (!phoneRaw) {
         result.textContent = "Geen geldig telefoonnummer.";
         return;
       }
 
       try {
-        // 1) use cached message if available (fast path)
         let msg = cacheGetWAMsg(currentOrder.OrderNumber);
-        if (msg) setWAPrepText_("", false);
 
-        // 2) if not cached, fetch now (slow path)
         if (!msg) {
-          setWAPrepText_("", false);
           result.textContent = "Bericht laden…";
           msg = await fetchWAMsgFromServer(currentOrder.OrderNumber);
           cacheSetWAMsg(currentOrder.OrderNumber, msg);
-          setWAPrepText_("", false);
         }
 
-        // 3) open WhatsApp immediately
         const url = `https://wa.me/${phoneRaw}?text=${encodeURIComponent(msg)}`;
         window.open(url, "_blank");
 
-        // 4) mark as sent in sheet (post-action)
         result.textContent = "Opslaan…";
         await markWhatsAppSent(currentOrder.OrderNumber, true);
         currentOrder.WhatsAppSent = true;
         setWAUI(currentOrder);
-        await safeLoadOrders(); // refresh pills
+
+        // After WhatsApp is sent: move to Ready tab automatically (unless already closed)
+        if (!isClosedLike_(currentOrder)) {
+          setTab("ready");
+        }
+
+        await safeLoadOrders();
+        refreshTabCount_("open");
+        refreshTabCount_("closed");
         result.textContent = "WhatsApp gemarkeerd als verzonden.";
       } catch (e) {
-        // last resort fallback message if server/template fails
         setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
         try {
           const fallback = buildWhatsAppMessageFallback(currentOrder);
@@ -1893,9 +1492,15 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
         await markWhatsAppSent(currentOrder.OrderNumber, newVal);
         currentOrder.WhatsAppSent = newVal;
         setWAUI(currentOrder);
+
+        // If toggled to sent -> move to Ready; if toggled off -> move back to Open
+        if (!isClosedLike_(currentOrder)) {
+          setTab(newVal ? "ready" : "open");
+        }
+
         await safeLoadOrders();
-    refreshTabCount_("open");
-    refreshTabCount_("closed");
+        refreshTabCount_("open");
+        refreshTabCount_("closed");
         result.textContent = `WhatsApp status gewijzigd (${newVal ? "Sent" : "Not sent"})`;
       } catch (e) {
         result.textContent = "Fout: " + (e.message || String(e));
@@ -1910,7 +1515,7 @@ document.getElementById("odTitle").textContent = "Order " + orderNumber;
     if (sb) {
       sb.addEventListener("input", () => {
         searchQuery = sb.value || "";
-        renderList(filterOrders_(lastOrders));
+        renderCurrent_();
       });
     }
     await loadBuildInfo();
