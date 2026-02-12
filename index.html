@@ -433,7 +433,9 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   <div class="wrap">
     <div class="muted" id="hint"></div>
     <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
-    <div class="grid" id="list"></div>
+    <div class="grid" id="listOpen"></div>
+    <div class="grid" id="listReady" style="display:none;"></div>
+    <div class="grid" id="listClosed" style="display:none;"></div>
   </div>
 
   <!-- Settings Modal -->
@@ -536,10 +538,19 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   let cacheOpen = null;
   let cacheClosed = null;
 
+
+  let openVersion = 0;
+  let closedVersion = 0;
+  const renderSigByTab = { open: null, ready: null, closed: null };
+  // Cache control (prevents refetch + duplicate in-flight calls)
+  let openDirty = true;
+  let closedDirty = true;
+  let openLoading = null;   // Promise or null
+  let closedLoading = null; // Promise or null
+
   const tabCountCache = { open: null, ready: null, closed: null };
   let searchQuery = "";
-
-  // Status buckets (Phase 1)
+// Status buckets (Phase 1)
   const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
 
   function normStatus_(s){ return String(s || "").trim().toLowerCase(); }
@@ -549,7 +560,14 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
 
   async function refreshTabCount_(tab) {
     try {
+      // Prefer local cache when available to avoid extra API calls
       if (tab === "closed") {
+        if (!closedDirty && Array.isArray(cacheClosed)) {
+          const count = Array.isArray(closedPool) ? closedPool.length : (cacheClosed ? cacheClosed.length : 0);
+          tabCountCache.closed = count;
+          updateTabBadge_("closed", count);
+          return;
+        }
         const res = await api("getClosedOrders");
         if (!res || !res.ok) return;
         const count = Array.isArray(res.orders) ? res.orders.length : 0;
@@ -558,7 +576,7 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
         return;
       }
 
-      // open/ready are derived from OPEN orders list (single call)
+// open/ready are derived from OPEN orders list (single call)
       const res = await api("getOpenOrders");
       if (!res || !res.ok) return;
       const arr = Array.isArray(res.orders) ? res.orders : [];
@@ -649,8 +667,23 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     return span;
   }
 
-  function renderList(orders) {
-    const list = document.getElementById("list");
+  function getListEl_(tab){
+    if (tab === "closed") return document.getElementById("listClosed");
+    if (tab === "ready") return document.getElementById("listReady");
+    return document.getElementById("listOpen");
+  }
+
+  function showTabContainers_(tab){
+    const lo = document.getElementById("listOpen");
+    const lr = document.getElementById("listReady");
+    const lc = document.getElementById("listClosed");
+    if (lo) lo.style.display = (tab === "open") ? "grid" : "none";
+    if (lr) lr.style.display = (tab === "ready") ? "grid" : "none";
+    if (lc) lc.style.display = (tab === "closed") ? "grid" : "none";
+  }
+
+  function renderList(orders, tab) {
+    const list = getListEl_(tab || currentTab);
     list.innerHTML = "";
 
     if (!orders.length) {
@@ -728,7 +761,23 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   }
 
   function renderCurrent_() {
-    renderList(filterOrders_(getSearchBase_()));
+    const tab = currentTab;
+    showTabContainers_(tab);
+
+    const ver = (tab === "closed") ? closedVersion : openVersion;
+    const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + String(ver);
+    const listEl = getListEl_(tab);
+
+    // If nothing relevant changed, just swap containers without rebuilding DOM
+    if (listEl && renderSigByTab[tab] === sig && listEl.dataset && listEl.dataset.rendered === "1") {
+      return;
+    }
+
+    const orders = filterOrders_(getSearchBase_());
+    renderList(orders, tab);
+
+    if (listEl && listEl.dataset) listEl.dataset.rendered = "1";
+    renderSigByTab[tab] = sig;
   }
 
 
@@ -807,44 +856,96 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     updateTabBadge_("ready", readyCount);
   }
 
-  async function loadOrders() {
-    const action = (currentTab === "closed") ? "getClosedOrders" : "getOpenOrders";
-    const res = await api(action);
-    if (!res || !res.ok) throw new Error((res && res.error) || "API error");
+    function applyTabView_(opts = {}) {
+    const prefetch = opts.prefetch !== false;
 
-    // Cache pools (server returns: open = Open+Ready subsets, closed = Afgehandeld)
     if (currentTab === "closed") {
-      cacheClosed = res.orders || [];
-      closedPool = sortNewestFirst_(cacheClosed);
       lastOrders = closedPool;
     } else {
-      cacheOpen = res.orders || [];
-      openPool = sortNewestFirst_(cacheOpen);
-      // For normal tab view, split openPool into Open vs Ready
       lastOrders = filterByTab_(openPool);
     }
 
     tabCountCache[currentTab] = lastOrders.length;
     updateTabBadge_(currentTab, lastOrders.length);
 
-    // Keep the other tab badges in sync (background)
-    const otherTabs = (currentTab === "closed")
-      ? ["open", "ready"]
-      : ["closed", (currentTab === "open" ? "ready" : "open")];
-
-    otherTabs.forEach(t => { if (tabCountCache[t] === null) refreshTabCount_(t); });
-
     setDebug_(`tab=${currentTab} • total=${lastOrders.length} • q="${searchQuery}"`);
-
-    // Search behavior:
-    // - Open/Ready tabs: search across Open+Ready (openPool)
-    // - Closed tab: search only within closed
     renderCurrent_();
 
-    prefetchTopDetails_(lastOrders);
+    if (prefetch) prefetchTopDetails_(lastOrders);
   }
 
-  function setTab(tab) {
+  async function ensureOpenData_(force = false) {
+    if (!force && !openDirty && Array.isArray(cacheOpen)) return;
+    if (openLoading) return openLoading;
+
+    openLoading = (async () => {
+      const res = await api("getOpenOrders");
+      if (!res || !res.ok) throw new Error((res && res.error) || "API error (getOpenOrders)");
+
+      cacheOpen = res.orders || [];
+      openPool = sortNewestFirst_(cacheOpen);
+// Update open/ready badges from cached dataset
+      const openCount = openPool.filter(isOpen_).length;
+      const readyCount = openPool.filter(isReady_).length;
+      tabCountCache.open = openCount;
+      tabCountCache.ready = readyCount;
+      updateTabBadge_("open", openCount);
+      updateTabBadge_("ready", readyCount);
+
+      openDirty = false;
+    openVersion += 1;
+    renderSigByTab.open = null;
+    renderSigByTab.ready = null;
+    })();
+
+    try { await openLoading; }
+    finally { openLoading = null; }
+  }
+
+  async function ensureClosedData_(force = false) {
+    if (!force && !closedDirty && Array.isArray(cacheClosed)) return;
+    if (closedLoading) return closedLoading;
+
+    closedLoading = (async () => {
+      const res = await api("getClosedOrders");
+      if (!res || !res.ok) throw new Error((res && res.error) || "API error (getClosedOrders)");
+
+      cacheClosed = res.orders || [];
+      closedPool = sortNewestFirst_(cacheClosed);
+tabCountCache.closed = closedPool.length;
+      updateTabBadge_("closed", closedPool.length);
+
+      closedDirty = false;
+    closedVersion += 1;
+    renderSigByTab.closed = null;
+    })();
+
+    try { await closedLoading; }
+    finally { closedLoading = null; }
+  }
+
+  async function loadCurrentTab_(opts = {}) {
+    const force = !!opts.force;
+    const showSpinner = !!opts.showSpinner;
+    const btn = document.getElementById("btnRefresh");
+    if (showSpinner && btn) { btn.classList.add("loading"); btn.disabled = true; }
+
+    try {
+      if (currentTab === "closed") await ensureClosedData_(force);
+      else await ensureOpenData_(force);
+
+      applyTabView_({ prefetch: true });
+    } finally {
+      if (showSpinner && btn) { btn.classList.remove("loading"); btn.disabled = false; }
+    }
+  }
+
+async function loadOrders() {
+    // Backward compatibility for existing callers
+    await loadCurrentTab_({ force: false, showSpinner: false });
+  }
+
+function setTab(tab) {
     const next = (tab === "closed" || tab === "ready") ? tab : "open";
     currentTab = next;
 
@@ -855,7 +956,12 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     if (readyBtn) readyBtn.classList.toggle("active", currentTab === "ready");
     if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
 
-    // Instant feedback using cache when available
+    // Instant feedback using cache when available (no refetch, avoid rebuild)
+    showTabContainers_(currentTab);
+    const listEl = getListEl_(currentTab);
+    if (listEl && listEl.children && listEl.children.length) return;
+
+    // If container is empty, render from cache if available
     if (currentTab === "closed" && cacheClosed) {
       lastOrders = cacheClosed;
       renderCurrent_();
@@ -863,7 +969,9 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
       lastOrders = filterByTab_(cacheOpen);
       renderCurrent_();
     }
+
   }
+
 
   function updateTabBadge_(tab, count) {
     try {
@@ -1088,25 +1196,33 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   })();
 
   // tabs
-  document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); setTab("open"); safeLoadOrders(); });
-  document.getElementById("tabReady").addEventListener("click", (ev) => { ev.preventDefault(); setTab("ready"); safeLoadOrders(); });
-  document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); setTab("closed"); safeLoadOrders(); });
+  async function onTabSwitch_(tab) {
+    setTab(tab);
+    // No refetch on tab switch; reuse cache unless marked dirty
+    try {
+      await loadCurrentTab_({ force: false, showSpinner: false });
+    } catch (e) {
+      document.getElementById("hint").textContent = "Error: " + (e.message || String(e));
+    }
+  }
+
+  document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("open"); });
+  document.getElementById("tabReady").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("ready"); });
+  document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("closed"); });
 
   document.getElementById("btnRefresh").onclick = async () => { await safeLoadOrders(); refreshTabCount_("open"); refreshTabCount_("closed"); };
 
-  async function safeLoadOrders() {
-    const btn = document.getElementById("btnRefresh");
-    if (btn) { btn.classList.add("loading"); btn.disabled = true; }
-    try { await loadOrders(); }
-    catch (e) {
+  async function safeLoadOrders(force = true) {
+    try {
+      await loadCurrentTab_({ force: !!force, showSpinner: true });
+    } catch (e) {
       document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
-      document.getElementById("list").innerHTML = "";
-    }
-    finally {
-      const btn2 = document.getElementById("btnRefresh");
-      if (btn2) { btn2.classList.remove("loading"); btn2.disabled = false; }
+      (document.getElementById("listOpen")||{}).innerHTML = "";
+      (document.getElementById("listReady")||{}).innerHTML = "";
+      (document.getElementById("listClosed")||{}).innerHTML = "";
     }
   }
+
 
   // --- WhatsApp state ---
   let currentOrder = null;
@@ -1168,47 +1284,79 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   }
 
   async function setOrderStatus_(status, note) {
-    if (!currentOrder) throw new Error("No order selected");
-    const orderNumber = String(currentOrder.OrderNumber || "").trim();
-    if (!orderNumber) throw new Error("Missing OrderNumber");
+  if (!currentOrder) throw new Error("No order selected");
+  const orderNumber = String(currentOrder.OrderNumber || "").trim();
+  if (!orderNumber) throw new Error("Missing OrderNumber");
 
-    const params = { orderNumber, status: String(status || "").trim() };
-    if (note) params.note = String(note);
+  const newStatus = String(status || "").trim();
+  const params = { orderNumber, status: newStatus };
+  if (note) params.note = String(note);
 
-    const res = await api("setOrderStatus", params);
-    if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set status");
+  // Close modal quickly and update UI immediately (optimistic)
+  const modal = document.getElementById("orderModal");
+  if (modal) modal.classList.remove("show");
+  resetCancelUI_();
 
-    currentOrder.OrderStatus = status;
-    document.getElementById("odActionResult").textContent = `✅ Status bijgewerkt: ${status}`;
+  const resEl = document.getElementById("odActionResult");
+  if (resEl) resEl.textContent = `⏳ Status opslaan: ${newStatus}`;
 
-    setTimeout(() => {
-      document.getElementById("orderModal").classList.remove("show");
-      resetCancelUI_();
-      loadOrders();
-      refreshTabCount_("open");
-      refreshTabCount_("closed");
-    }, 250);
-  }
+  // Optimistic move between tabs/lists
+  optimisticStatusUpdate_(
+    orderNumber,
+    { OrderStatus: newStatus },
+    api("setOrderStatus", params).then((res) => {
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set status");
+      return res;
+    }),
+    `✅ Status bijgewerkt: ${newStatus}`
+  );
+
+  // Mark caches dirty so a later manual refresh can reconcile server-side derived fields (optional)
+  openDirty = true;
+  closedDirty = true;
+}
+
 
   function scheduleSavePickChecks_() {
-    if (!currentOrder) return;
-    clearTimeout(pickSaveTimer);
-    pickSaveTimer = setTimeout(async () => {
-      try {
-        const res = await api("setPickChecks", {
-          orderNumber: String(currentOrder.OrderNumber || "").trim(),
-          checks: JSON.stringify(pickChecks)
-        });
+  if (!currentOrder) return;
+
+  // Optimistic: we already updated `pickChecks` in-memory on click.
+  // Reflect immediately in the current order object (for UI + caching).
+  currentOrder.PickChecks = pickChecks;
+
+  clearTimeout(pickSaveTimer);
+  pickSaveTimer = setTimeout(() => {
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    const payload = {
+      orderNumber,
+      checks: JSON.stringify(pickChecks)
+    };
+
+    const waRes = document.getElementById("waResult");
+    if (waRes) waRes.textContent = "Opslaan…";
+
+    background_(
+      api("setPickChecks", payload).then((res) => {
         if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
+        return res;
+      }),
+      (res) => {
+        // Server is source of truth for PickComplete calculation
         currentOrder.PickComplete = !!res.PickComplete;
         currentOrder.PickChecks = pickChecks;
         updatePickUI_();
-      } catch (e) {
-        const waRes = document.getElementById("waResult");
+        if (waRes) waRes.textContent = "Opgeslagen ✅";
+        // keep list caches in sync (no refetch)
+        updateOrderInCaches_(orderNumber, { PickComplete: !!res.PickComplete, PickChecks: pickChecks });
+        applyTabView_({ prefetch: false });
+      },
+      (e) => {
         if (waRes) waRes.textContent = "Pick save error: " + (e.message || String(e));
       }
-    }, 300);
-  }
+    );
+  }, 250);
+}
+
 
   // --- Order detail prefetch/cache ---
   const DETAIL_PREFETCH_LIMIT = 8;
@@ -1411,6 +1559,133 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     if (!res || !res.ok) throw new Error((res && res.error) || "Failed to update WhatsApp status");
   }
 
+// --- Optimistic UI helpers (keep UI responsive while writes happen) ---
+function updateOrderInCaches_(orderNumber, patch) {
+  const key = String(orderNumber || "").trim();
+  if (!key) return;
+
+  function applyToArr(arr){
+    if (!Array.isArray(arr)) return;
+    for (let i=0;i<arr.length;i++){
+      const o = arr[i];
+      if (String(o && o.OrderNumber) === key) {
+        Object.assign(o, patch);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (currentOrder && String(currentOrder.OrderNumber) === key) Object.assign(currentOrder, patch);
+  applyToArr(cacheOpen); applyToArr(openPool);
+  applyToArr(cacheClosed); applyToArr(closedPool);
+
+  if (Array.isArray(openPool)) {
+    const openCount = openPool.filter(isOpen_).length;
+    const readyCount = openPool.filter(isReady_).length;
+    tabCountCache.open = openCount;
+    tabCountCache.ready = readyCount;
+    updateTabBadge_("open", openCount);
+    updateTabBadge_("ready", readyCount);
+  }
+  if (Array.isArray(closedPool)) {
+    tabCountCache.closed = closedPool.length;
+    updateTabBadge_("closed", closedPool.length);
+  }
+}
+
+function background_(promise, onOk, onErr){
+  Promise.resolve(promise).then(onOk).catch(onErr);
+}
+
+
+function resortPools_() {
+  if (Array.isArray(cacheOpen)) openPool = sortNewestFirst_(cacheOpen);
+  if (Array.isArray(cacheClosed)) closedPool = sortNewestFirst_(cacheClosed);
+}
+
+function moveOrderBetweenCaches_(orderNumber) {
+  // If an order became closed-like, move it from open caches to closed caches
+  const key = String(orderNumber || "").trim();
+  if (!key) return;
+
+  let found = null;
+
+  function takeFrom(arr){
+    if (!Array.isArray(arr)) return null;
+    const idx = arr.findIndex(o => String(o && o.OrderNumber) === key);
+    if (idx >= 0) {
+      const o = arr[idx];
+      arr.splice(idx, 1);
+      return o;
+    }
+    return null;
+  }
+
+  // Take from open side first
+  found = takeFrom(cacheOpen) || takeFrom(openPool);
+  // If not found, maybe it was in closed already
+  if (!found) found = takeFrom(cacheClosed) || takeFrom(closedPool);
+
+  if (!found) return;
+
+  if (isClosedLike_(found)) {
+    if (!Array.isArray(cacheClosed)) cacheClosed = [];
+    cacheClosed.unshift(found);
+    if (!Array.isArray(closedPool)) closedPool = [];
+    closedPool.unshift(found);
+  } else {
+    if (!Array.isArray(cacheOpen)) cacheOpen = [];
+    cacheOpen.unshift(found);
+    if (!Array.isArray(openPool)) openPool = [];
+    openPool.unshift(found);
+  }
+
+  resortPools_();
+}
+
+function optimisticStatusUpdate_(orderNumber, patch, writePromise, uiMessageOk) {
+  const key = String(orderNumber || "").trim();
+  if (!key) return;
+
+  // Snapshot minimal fields for revert
+  const prev = currentOrder && String(currentOrder.OrderNumber) === key ? {
+    OrderStatus: currentOrder.OrderStatus,
+    WhatsAppSent: currentOrder.WhatsAppSent
+  } : null;
+
+  // Apply patch locally
+  updateOrderInCaches_(key, patch);
+
+  // Rebucket if status changed
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "OrderStatus")) {
+    moveOrderBetweenCaches_(key);
+  }
+
+  // Re-render current tab quickly
+  applyTabView_({ prefetch: false });
+
+  // Background writeback
+  background_(
+    writePromise,
+    () => {
+      const res = document.getElementById("odResult");
+      if (res && uiMessageOk) res.textContent = uiMessageOk;
+    },
+    (e) => {
+      // Revert local patch on failure
+      if (prev) updateOrderInCaches_(key, prev);
+      // Rebucket again after revert
+      moveOrderBetweenCaches_(key);
+      applyTabView_({ prefetch: false });
+
+      const res = document.getElementById("odResult");
+      if (res) res.textContent = "Fout: " + ((e && (e.message || String(e))) || "Opslaan mislukt");
+    }
+  );
+}
+
+
   function setWAUI(order) {
     const el = document.getElementById("waStatusText");
     if (!el) return;
@@ -1459,20 +1734,27 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
         window.open(url, "_blank");
 
         result.textContent = "Opslaan…";
-        await markWhatsAppSent(currentOrder.OrderNumber, true);
-        currentOrder.WhatsAppSent = true;
-        setWAUI(currentOrder);
 
-        // After WhatsApp is sent: move to Ready tab automatically (unless already closed)
-        if (!isClosedLike_(currentOrder)) {
-          setTab("ready");
-        }
+// Optimistic update: instant UI, keep current tab
+const orderNo = currentOrder.OrderNumber;
+const prevVal = !!currentOrder.WhatsAppSent;
 
-        await safeLoadOrders();
-        refreshTabCount_("open");
-        refreshTabCount_("closed");
-        result.textContent = "WhatsApp gemarkeerd als verzonden.";
-      } catch (e) {
+updateOrderInCaches_(orderNo, { WhatsAppSent: true });
+setWAUI(currentOrder);
+applyTabView_({ prefetch: false });
+
+// Background writeback (don't block UI)
+background_(
+  markWhatsAppSent(orderNo, true),
+  () => { result.textContent = "WhatsApp gemarkeerd als verzonden."; },
+  (e) => {
+    updateOrderInCaches_(orderNo, { WhatsAppSent: prevVal });
+    setWAUI(currentOrder);
+    applyTabView_({ prefetch: false });
+    result.textContent = "Fout: " + ((e && (e.message || String(e))) || "Opslaan mislukt");
+  }
+);
+} catch (e) {
         setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
         try {
           const fallback = buildWhatsAppMessageFallback(currentOrder);
@@ -1485,26 +1767,39 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
 
     btnToggle.onclick = async () => {
       if (!currentOrder) return;
-      const newVal = !currentOrder.WhatsAppSent;
-
       try {
-        result.textContent = "Opslaan…";
-        await markWhatsAppSent(currentOrder.OrderNumber, newVal);
-        currentOrder.WhatsAppSent = newVal;
-        setWAUI(currentOrder);
+      result.textContent = "Opslaan…";
 
-        // If toggled to sent -> move to Ready; if toggled off -> move back to Open
-        if (!isClosedLike_(currentOrder)) {
-          setTab(newVal ? "ready" : "open");
-        }
+const orderNo = currentOrder.OrderNumber;
+const prevVal = !!currentOrder.WhatsAppSent;
+const newVal = !prevVal;
 
-        await safeLoadOrders();
-        refreshTabCount_("open");
-        refreshTabCount_("closed");
-        result.textContent = `WhatsApp status gewijzigd (${newVal ? "Sent" : "Not sent"})`;
-      } catch (e) {
+// Optimistic update: instant UI, keep current tab
+updateOrderInCaches_(orderNo, { WhatsAppSent: newVal });
+setWAUI(currentOrder);
+applyTabView_({ prefetch: false });
+
+background_(
+  markWhatsAppSent(orderNo, newVal),
+  () => { result.textContent = `WhatsApp status gewijzigd (${newVal ? "Sent" : "Not sent"})`; },
+  (e) => {
+    updateOrderInCaches_(orderNo, { WhatsAppSent: prevVal });
+    setWAUI(currentOrder);
+    applyTabView_({ prefetch: false });
+    result.textContent = "Fout: " + ((e && (e.message || String(e))) || "Opslaan mislukt");
+  }
+);
+} catch (e) {
         result.textContent = "Fout: " + (e.message || String(e));
       }
+    };
+  }
+
+  function debounce_(fn, ms){
+    let t = null;
+    return (...args) => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
     };
   }
 
