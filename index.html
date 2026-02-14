@@ -532,6 +532,42 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   const DEBUG = /(?:\\?|&)debug=1(?:&|$)/.test(location.search);
 
   let currentTab = "open";
+      // ---------- Client-side WhatsApp config (fast) ----------
+      const APP_CONFIG = {
+        storeName: "KevinJuices",
+        pickupLink: "https://maps.app.goo.gl/PJxe7u889CFKQzmy8",
+        pickupHoursText: `Ma–Vr: 12:00 – 20:00
+Za: 09:00 – 17:00
+*Zon en Feestdagen: Gesloten*`,
+        paymentMethodsText: `* Contant
+* POS (pin)`,
+        waTemplateCustomer: `Hi {{CustomerFirstName}},
+
+Dank je wel voor je bestelling bij {{StoreName}}
+We hebben deze in goede orde ontvangen en zetten het voor je klaar.
+
+*Bestellingsoverzicht*
+Order#: *{{OrderNumber}}*
+
+{{OrderItemsText}}
+
+Totaalbedrag: *{{OrderTotalSRDText}}*
+
+*Betaling*
+Betalen kan bij afhalen via:
+{{PaymentMethodsText}}
+
+*Afhaaladres*
+{{PickupLink}}
+
+Zodra u arriveert, ziet u het gebouw van de cambio. Loop of rijd door tot het einde van het gebouw, waar u een grindgedeelte met kokosbomen ziet. U kunt daar parkeren bij de glazen deur. Wij helpen u daar graag verder.
+
+*Afhaaltijden*
+{{PickupHoursText}}
+
+Tot zo!
+Team {{StoreName}}`
+      };
   let lastOrders = [];
   let openPool = []; // open orders from server (includes Open + Ready subsets)
   let closedPool = []; // closed orders from server
@@ -549,6 +585,8 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   let closedLoading = null; // Promise or null
 
   const tabCountCache = { open: null, ready: null, closed: null };
+  const waCache = new Map();
+  const waInFlight = new Map();
   let searchQuery = "";
 // Status buckets (Phase 1)
   const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
@@ -1563,16 +1601,29 @@ function computePickComplete_(checks) {
   }
 
   function prefetchWAMsg(orderNumber) {
-    const key = String(orderNumber || "").trim();
-    if (!key) return Promise.resolve("");
-    const cached = cacheGetWAMsg(key);
-    if (cached) return Promise.resolve(cached);
+  const key = String(orderNumber || "").trim();
+  if (!key) return Promise.resolve(null);
 
-    return fetchWAMsgFromServer(key).then(msg => {
-      cacheSetWAMsg(key, msg);
-      return msg;
-    });
-  }
+  if (waCache.has(key)) return Promise.resolve(waCache.get(key));
+  if (waInFlight.has(key)) return waInFlight.get(key);
+
+  const p = Promise.resolve().then(() => {
+    // Build instantly client-side
+    const text = buildWhatsAppTextClient_(currentOrder || {});
+    const phone = (currentOrder && (currentOrder.CustomerPhone || currentOrder.Phone || currentOrder.phone)) || "";
+    const url = buildWhatsAppUrl_(phone, text);
+
+    const obj = { text, url };
+    waCache.set(key, obj);
+    return obj;
+  }).finally(() => {
+    waInFlight.delete(key);
+  });
+
+  waInFlight.set(key, p);
+  return p;
+}
+
 
   async function markWhatsAppSent(orderNumber, sent) {
     const res = await api("setWhatsAppSent", { orderNumber, sent: sent ? "true" : "false" });
@@ -1742,57 +1793,44 @@ function optimisticStatusUpdate_(orderNumber, patch, writePromise, uiMessageOk) 
     if (!btnWA || !btnToggle || !result) return;
 
     btnWA.onclick = async () => {
-      if (!currentOrder) return;
+  if (!currentOrder) return;
 
-      const phoneRaw = (currentOrder.CustomerPhone || "").replace(/\\D/g, "");
-      if (!phoneRaw) {
-        result.textContent = "Geen geldig telefoonnummer.";
-        return;
-      }
+  const orderNo = currentOrder.OrderNumber;
+  const waRes = document.getElementById("waResult");
+  const btn = document.getElementById("btnWA");
 
-      try {
-        let msg = cacheGetWAMsg(currentOrder.OrderNumber);
+  try {
+    // Build message instantly client-side (no server call)
+    const msgObj = await prefetchWAMsg(orderNo);
+    if (!msgObj || !msgObj.url) throw new Error("WhatsApp URL kon niet worden opgebouwd");
+    if (btn) btn.disabled = false;
 
-        if (!msg) {
-          result.textContent = "Bericht laden…";
-          msg = await fetchWAMsgFromServer(currentOrder.OrderNumber);
-          cacheSetWAMsg(currentOrder.OrderNumber, msg);
-        }
+    // Open WhatsApp immediately
+    window.open(msgObj.url, "_blank");
 
-        const url = `https://wa.me/${phoneRaw}?text=${encodeURIComponent(msg)}`;
-        window.open(url, "_blank");
+    // Mark WhatsApp as sent optimistically + background writeback (already patched behavior)
+    if (waRes) waRes.textContent = "Opslaan…";
 
-        result.textContent = "Opslaan…";
-
-// Optimistic update: instant UI, keep current tab
-const orderNo = currentOrder.OrderNumber;
-const prevVal = !!currentOrder.WhatsAppSent;
-
-updateOrderInCaches_(orderNo, { WhatsAppSent: true });
-setWAUI(currentOrder);
-applyTabView_({ prefetch: false });
-
-// Background writeback (don't block UI)
-background_(
-  markWhatsAppSent(orderNo, true),
-  () => { result.textContent = "WhatsApp gemarkeerd als verzonden."; },
-  (e) => {
-    updateOrderInCaches_(orderNo, { WhatsAppSent: prevVal });
+    const prevVal = !!currentOrder.WhatsAppSent;
+    updateOrderInCaches_(String(orderNo || "").trim(), { WhatsAppSent: true });
     setWAUI(currentOrder);
     applyTabView_({ prefetch: false });
-    result.textContent = "Fout: " + ((e && (e.message || String(e))) || "Opslaan mislukt");
-  }
-);
-} catch (e) {
-        setWAPrepText_("WhatsApp bericht niet beschikbaar", true);
-        try {
-          const fallback = buildWhatsAppMessageFallback(currentOrder);
-          const url = `https://wa.me/${phoneRaw}?text=${encodeURIComponent(fallback)}`;
-          window.open(url, "_blank");
-        } catch (_) {}
-        result.textContent = "Fout: " + (e.message || String(e));
+
+    background_(
+      markWhatsAppSent(orderNo, true),
+      () => { if (waRes) waRes.textContent = "WhatsApp gemarkeerd als verzonden."; },
+      (e) => {
+        updateOrderInCaches_(String(orderNo || "").trim(), { WhatsAppSent: prevVal });
+        setWAUI(currentOrder);
+        applyTabView_({ prefetch: false });
+        if (waRes) waRes.textContent = "Fout: " + ((e && (e.message || String(e))) || "Opslaan mislukt");
       }
-    };
+    );
+  } catch (e) {
+    if (waRes) waRes.textContent = "Fout: " + (e && (e.message || String(e)));
+  }
+}
+;
 
     btnToggle.onclick = async () => {
       if (!currentOrder) return;
@@ -1824,7 +1862,72 @@ background_(
     };
   }
 
-  function debounce_(fn, ms){
+  
+
+function applyTemplateClient_(tpl, vars) {
+  return String(tpl || "").replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (m, key) => {
+    const v = (vars && Object.prototype.hasOwnProperty.call(vars, key)) ? vars[key] : "";
+    return (v === null || v === undefined) ? "" : String(v);
+  });
+}
+
+function buildOrderItemsTextClient_(order) {
+  // Prefer prebuilt text if present
+  if (order && order.OrderItemsText) return String(order.OrderItemsText);
+
+  const items = (order && (order.Items || order.items)) || [];
+  if (!Array.isArray(items) || !items.length) return "";
+
+  // Expected item fields vary; try best-effort formatting
+  const lines = [];
+  for (const it of items) {
+    const qty = it.quantity ?? it.qty ?? it.count ?? 1;
+    const name = it.name ?? it.productName ?? it.title ?? it.sku ?? "Item";
+    const lineTotal = it.total ?? it.totalPrice ?? it.price ?? "";
+    if (lineTotal !== "" && lineTotal !== null && lineTotal !== undefined) {
+      lines.push(`• ${qty}x ${name} — ${lineTotal}`);
+    } else {
+      lines.push(`• ${qty}x ${name}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function formatSRD_(n) {
+  const num = Number(n || 0);
+  if (!isFinite(num)) return "";
+  // Simple SRD formatting without locale dependency
+  return "SRD " + Math.round(num).toString();
+}
+
+function buildWhatsAppTextClient_(order) {
+  const fullName = String((order && (order.CustomerName || order.customerName)) || "").trim();
+  const firstName = fullName ? fullName.split(/\s+/)[0] : "";
+  const orderNo = String((order && (order.OrderNumber || order.order_number || order.number)) || "").trim();
+  const total = order && (order.OrderTotalSRD ?? order.TotalSRD ?? order.total_srd ?? order.total);
+  const itemsText = buildOrderItemsTextClient_(order);
+
+  const vars = {
+    CustomerFirstName: firstName,
+    StoreName: APP_CONFIG.storeName,
+    OrderNumber: orderNo,
+    OrderItemsText: itemsText,
+    OrderTotalSRDText: formatSRD_(total),
+    PaymentMethodsText: APP_CONFIG.paymentMethodsText,
+    PickupLink: APP_CONFIG.pickupLink,
+    PickupHoursText: APP_CONFIG.pickupHoursText
+  };
+
+  return applyTemplateClient_(APP_CONFIG.waTemplateCustomer, vars);
+}
+
+function buildWhatsAppUrl_(phone, text) {
+  const p = String(phone || "").replace(/\D+/g, "");
+  const textEnc = encodeURIComponent(String(text || ""));
+  if (!p) return "";
+  return "https://wa.me/" + p + "?text=" + textEnc;
+}
+function debounce_(fn, ms){
     let t = null;
     return (...args) => {
       if (t) clearTimeout(t);
