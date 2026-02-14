@@ -588,6 +588,16 @@ Team {{StoreName}}`
   const waCache = new Map();
   const waInFlight = new Map();
   let searchQuery = "";
+const CLOSED_LOOKBACK_DAYS_CLIENT = 7; // Afgehandeld shows last N days
+function msFromAny_(v){
+  try{
+    if (!v) return 0;
+    if (v instanceof Date) return v.getTime();
+    if (typeof v === "number") return v;
+    const t = Date.parse(String(v));
+    return isNaN(t) ? 0 : t;
+  }catch(e){ return 0; }
+}
 // Status buckets (Phase 1)
   const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
 
@@ -819,10 +829,26 @@ Team {{StoreName}}`
   }
 
 
-  function filterByTab_(orders){
+  
+function filterClosed_(orders){
+  const arr = Array.isArray(orders) ? orders : [];
+  const cutoff = Date.now() - (CLOSED_LOOKBACK_DAYS_CLIENT * 24 * 60 * 60 * 1000);
+  return arr.filter(o => {
+    const ms = msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
+    return ms >= cutoff;
+  });
+}
+
+function filterByTab_(orders){
     const arr = Array.isArray(orders) ? orders : [];
-    if (currentTab === "closed") return arr;
-    if (currentTab === "ready") return arr.filter(isReady_);
+    if (currentTab === "closed") {
+      const cutoff = Date.now() - (CLOSED_LOOKBACK_DAYS_CLIENT * 24 * 60 * 60 * 1000);
+      return arr.filter(o => {
+        const ms = msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
+        return ms >= cutoff;
+      });
+    }
+if (currentTab === "ready") return arr.filter(isReady_);
     return arr.filter(isOpen_); // open tab
   }
 
@@ -878,8 +904,8 @@ Team {{StoreName}}`
 
   function sortNewestFirst_(orders) {
     return (orders || []).slice().sort((a, b) => {
-      const ta = Date.parse(a.CreatedAt || 0);
-      const tb = Date.parse(b.CreatedAt || 0);
+      const ta = Date.parse((a.StatusUpdatedAt || a.CreatedAt) || 0);
+      const tb = Date.parse((b.StatusUpdatedAt || b.CreatedAt) || 0);
       return tb - ta;
     });
   }
@@ -898,7 +924,7 @@ Team {{StoreName}}`
     const prefetch = opts.prefetch !== false;
 
     if (currentTab === "closed") {
-      lastOrders = closedPool;
+      lastOrders = filterClosed_(closedPool);
     } else {
       lastOrders = filterByTab_(openPool);
     }
@@ -1001,7 +1027,7 @@ function setTab(tab) {
 
     // If container is empty, render from cache if available
     if (currentTab === "closed" && cacheClosed) {
-      lastOrders = cacheClosed;
+      lastOrders = filterClosed_(cacheClosed);
       renderCurrent_();
     } else if ((currentTab === "open" || currentTab === "ready") && cacheOpen) {
       lastOrders = filterByTab_(cacheOpen);
