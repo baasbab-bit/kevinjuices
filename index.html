@@ -1240,6 +1240,16 @@ function setTab(tab) {
     return out;
   }
 
+function computePickComplete_(checks) {
+  const arr = Array.isArray(checks) ? checks : [];
+  if (!arr.length) return false;
+  for (let i = 0; i < arr.length; i++) {
+    if (!arr[i]) return false;
+  }
+  return true;
+}
+
+
   function initPickState_(orderObj) {
     const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
     pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
@@ -1342,12 +1352,11 @@ function setTab(tab) {
       }),
       (res) => {
         // Server is source of truth for PickComplete calculation
-        currentOrder.PickComplete = !!res.PickComplete;
-        currentOrder.PickChecks = pickChecks;
+        currentOrder.PickComplete = computePickComplete_(pickChecks); currentOrder.PickChecks = pickChecks;
         updatePickUI_();
         if (waRes) waRes.textContent = "Opgeslagen ✅";
         // keep list caches in sync (no refetch)
-        updateOrderInCaches_(orderNumber, { PickComplete: !!res.PickComplete, PickChecks: pickChecks });
+        updateOrderInCaches_(orderNumber, { PickComplete: computePickComplete_(pickChecks), PickChecks: pickChecks });
         applyTabView_({ prefetch: false });
       },
       (e) => {
@@ -1473,10 +1482,21 @@ function setTab(tab) {
       cb.className = "pickCb";
       cb.checked = !!pickChecks[idx];
       cb.onchange = () => {
-        pickChecks[idx] = !!cb.checked;
-        currentOrder.PickChecks = pickChecks;
-        scheduleSavePickChecks_();
-      };
+  pickChecks[idx] = !!cb.checked;
+  currentOrder.PickChecks = pickChecks;
+
+  // Optimistic: enable/disable "Afgehandeld" instantly based on local completion
+  const pc = computePickComplete_(pickChecks);
+  currentOrder.PickComplete = pc;
+  updatePickUI_();
+
+  // Keep list caches in sync immediately (no refetch)
+  updateOrderInCaches_(String(currentOrder.OrderNumber || "").trim(), { PickChecks: pickChecks, PickComplete: pc });
+  applyTabView_({ prefetch: false });
+
+  scheduleSavePickChecks_();
+};
+
       pickWrap.appendChild(cb);
 
       const img = document.createElement("img");
@@ -1592,7 +1612,16 @@ function updateOrderInCaches_(orderNumber, patch) {
     tabCountCache.closed = closedPool.length;
     updateTabBadge_("closed", closedPool.length);
   }
-}
+
+// Invalidate render signatures so lists update immediately on optimistic changes
+try {
+  if (typeof openVersion !== "undefined") { openVersion++; }
+  if (typeof renderSigByTab !== "undefined") { renderSigByTab.open = null; renderSigByTab.ready = null; }
+  if (typeof closedVersion !== "undefined") { closedVersion++; }
+  if (typeof renderSigByTab !== "undefined") { renderSigByTab.closed = null; }
+} catch (e) {}
+
+  }
 
 function background_(promise, onOk, onErr){
   Promise.resolve(promise).then(onOk).catch(onErr);
