@@ -1904,16 +1904,27 @@ function buildOrderItemsTextClient_(order) {
   const items = (order && (order.Items || order.items)) || [];
   if (!Array.isArray(items) || !items.length) return "";
 
-  // Expected item fields vary; try best-effort formatting
+  // Expected item fields vary; try best-effort formatting (include variants/options when available)
   const lines = [];
   for (const it of items) {
     const qty = it.quantity ?? it.qty ?? it.count ?? 1;
     const name = it.name ?? it.productName ?? it.title ?? it.sku ?? "Item";
     const lineTotal = it.total ?? it.totalPrice ?? it.price ?? "";
+
+    // Ecwid variants/options can appear under different keys depending on mapping
+    const rawOpts = it.options ?? it.selectedOptions ?? it.selected_options ?? it.variationOptions ?? it.variation_options ?? it.choiceOptions ?? it.choices;
+    let opts = "";
+    try {
+      if (rawOpts) opts = (typeof formatOptions === "function") ? formatOptions(rawOpts) : String(rawOpts);
+    } catch (e) {
+      opts = "";
+    }
+    const optsText = opts ? ` (${opts})` : "";
+
     if (lineTotal !== "" && lineTotal !== null && lineTotal !== undefined) {
-      lines.push(`• ${qty}x ${name} — ${lineTotal}`);
+      lines.push(`• ${qty}x ${name}${optsText} — ${lineTotal}`);
     } else {
-      lines.push(`• ${qty}x ${name}`);
+      lines.push(`• ${qty}x ${name}${optsText}`);
     }
   }
   return lines.join("\n");
