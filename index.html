@@ -412,7 +412,60 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   header{ z-index: 50; }
   .tabs{ z-index: 49; }
 
-  </style>
+  
+/* Closed tab day grouping */
+.dayGroupHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+  padding:8px 10px;
+  margin-top:8px;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:14px;
+  background: rgba(255,255,255,.70);
+  backdrop-filter: blur(6px);
+}
+.dayGroupTitle{
+  font-weight:900;
+  font-size:13px;
+  color: rgba(11,27,20,.80);
+  text-transform: capitalize;
+}
+.dayGroupMeta{
+  font-size:12px;
+  color: rgba(11,27,20,.55);
+  font-weight:800;
+  white-space:nowrap;
+}
+
+/* Day grouping (Open + Closed) with collapsible sections */
+.dayGroupHeader{
+  cursor:pointer;
+  user-select:none;
+}
+.dayGroupLeft{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  min-width: 0;
+}
+.dayGroupChevron{
+  display:inline-block;
+  width: 16px;
+  text-align:center;
+  font-weight:900;
+  color: rgba(11,27,20,.60);
+  transform: rotate(0deg);
+  transition: transform .12s ease;
+}
+.dayGroupChevron.collapsed{
+  transform: rotate(-90deg);
+}
+.dayGroupBody{
+  padding-left: 0;
+}
+</style>
 </head>
 <body>
   <header>
@@ -426,7 +479,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
 
   <div class="tabs">
     <button class="tab active" data-tab="open" id="tabOpen">Open<span class="badge" id="badgeOpen">0</span></button>
-    <button class="tab" data-tab="ready" id="tabReady">Ready<span class="badge" id="badgeReady">0</span></button>
     <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld<span class="badge" id="badgeClosed">0</span></button>
   </div>
 
@@ -434,7 +486,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     <div class="muted" id="hint"></div>
     <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
     <div class="grid" id="listOpen"></div>
-    <div class="grid" id="listReady" style="display:none;"></div>
     <div class="grid" id="listClosed" style="display:none;"></div>
   </div>
 
@@ -530,14 +581,14 @@ let lastOrders = [];
 
   let openVersion = 0;
   let closedVersion = 0;
-  const renderSigByTab = { open: null, ready: null, closed: null };
+  const renderSigByTab = { open: null, closed: null };
   // Cache control (prevents refetch + duplicate in-flight calls)
   let openDirty = true;
   let closedDirty = true;
   let openLoading = null;   // Promise or null
   let closedLoading = null; // Promise or null
 
-  const tabCountCache = { open: null, ready: null, closed: null };
+  const tabCountCache = { open: null, closed: null };
   let searchQuery = "";
 const CLOSED_LOOKBACK_DAYS_CLIENT = 7; // Afgehandeld shows last N days
 function msFromAny_(v){
@@ -554,12 +605,10 @@ function msFromAny_(v){
 
   function normStatus_(s){ return String(s || "").trim().toLowerCase(); }
   function isClosedLike_(o){ return CLOSED_STATUSES.has(normStatus_(o && o.OrderStatus)); }
-  function isReady_(o){ return !!(o && o.WhatsAppSent) && !isClosedLike_(o); }
-  function isOpen_(o){ return !isClosedLike_(o) && !isReady_(o); }
+  function isOpen_(o){ return !isClosedLike_(o); }
 
   async function refreshTabCount_(tab) {
     try {
-      // Prefer local cache when available to avoid extra API calls
       if (tab === "closed") {
         if (!closedDirty && Array.isArray(cacheClosed)) {
           const count = Array.isArray(closedPool) ? closedPool.length : (cacheClosed ? cacheClosed.length : 0);
@@ -575,22 +624,20 @@ function msFromAny_(v){
         return;
       }
 
-// open/ready are derived from OPEN orders list (single call)
+      // Open = all active orders (not closed/cancelled/etc.)
       const res = await api("getOpenOrders");
       if (!res || !res.ok) return;
       const arr = Array.isArray(res.orders) ? res.orders : [];
       const openCount = arr.filter(isOpen_).length;
-      const readyCount = arr.filter(isReady_).length;
       tabCountCache.open = openCount;
-      tabCountCache.ready = readyCount;
       updateTabBadge_("open", openCount);
-      updateTabBadge_("ready", readyCount);
     } catch (e) {
       // ignore
     }
   }
 
   function getApiBase() {
+
     return (localStorage.getItem(LS_KEY) || "").trim();
   }
   function normalizeApiBase_(v) {
@@ -658,33 +705,30 @@ function msFromAny_(v){
 
   function getListEl_(tab){
     if (tab === "closed") return document.getElementById("listClosed");
-    if (tab === "ready") return document.getElementById("listReady");
     return document.getElementById("listOpen");
   }
 
   function showTabContainers_(tab){
     const lo = document.getElementById("listOpen");
-    const lr = document.getElementById("listReady");
     const lc = document.getElementById("listClosed");
     if (lo) lo.style.display = (tab === "open") ? "grid" : "none";
-    if (lr) lr.style.display = (tab === "ready") ? "grid" : "none";
     if (lc) lc.style.display = (tab === "closed") ? "grid" : "none";
   }
 
   function renderList(orders, tab) {
-    const list = getListEl_(tab || currentTab);
+    const activeTab = tab || currentTab;
+    const list = getListEl_(activeTab);
     list.innerHTML = "";
 
     if (!orders.length) {
       const hint = document.getElementById("hint");
       if (currentTab === "open") hint.textContent = "📭 Geen open orders.";
-      else if (currentTab === "ready") hint.textContent = "📦 Geen orders in Ready.";
       else hint.textContent = "✅ Geen afgehandelde orders in deze periode.";
       return;
     }
     document.getElementById("hint").textContent = "";
 
-    orders.forEach(o => {
+    const buildCard_ = (o) => {
       const card = document.createElement("div");
       card.className = "card";
       const stKey = normStatus_(o.OrderStatus || "Open");
@@ -722,8 +766,109 @@ function msFromAny_(v){
 
       card.appendChild(head);
       card.appendChild(pills);
-      list.appendChild(card);
-    });
+      return card;
+    };
+
+    // Grouping for Open + Closed tabs with collapsible day sections.
+    // - Day order: newest day on top
+    // - Within day: earliest time on top
+    const groupedTabs = new Set(["open","closed"]);
+    if (groupedTabs.has(activeTab)) {
+      const msForTab_ = (o) => {
+        if (activeTab === "closed") return msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
+        return msFromAny_(o && (o.CreatedAt || o.StatusUpdatedAt));
+      };
+
+      const dayKey_ = (o) => {
+        try{
+          const ms = msForTab_(o);
+          if (!ms) return "Onbekende datum";
+          const d = new Date(ms);
+          // Stable key for sorting (YYYY-MM-DD in Paramaribo time)
+          return d.toLocaleDateString("en-CA", { timeZone: "America/Paramaribo" }); // e.g. 2026-02-20
+        }catch(e){ return "Onbekende datum"; }
+      };
+
+      const dayLabel_ = (yyyy_mm_dd) => {
+        try{
+          if (yyyy_mm_dd === "Onbekende datum") return yyyy_mm_dd;
+          const [y,m,da] = yyyy_mm_dd.split("-").map(Number);
+          // Use UTC noon to avoid DST edge cases when formatting in local tz
+          const dt = new Date(Date.UTC(y, (m||1)-1, da||1, 12, 0, 0));
+          return dt.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo", weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        }catch(e){ return yyyy_mm_dd; }
+      };
+
+      const collapseKey_ = (k) => `pq_collapsed_${activeTab}_${k}`;
+      const isCollapsed_ = (k) => (sessionStorage.getItem(collapseKey_(k)) === "1");
+      const setCollapsed_ = (k, v) => {
+        try { sessionStorage.setItem(collapseKey_(k), v ? "1" : "0"); } catch(e){}
+      };
+
+      // Group
+      const groups = new Map(); // dayKey -> orders[]
+      (orders || []).forEach(o => {
+        const k = dayKey_(o);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(o);
+      });
+
+      // Sort day keys: newest first. Unknown date goes last.
+      const keys = Array.from(groups.keys()).sort((a,b) => {
+        if (a === "Onbekende datum" && b === "Onbekende datum") return 0;
+        if (a === "Onbekende datum") return 1;
+        if (b === "Onbekende datum") return -1;
+        return (a < b) ? 1 : (a > b ? -1 : 0); // descending YYYY-MM-DD
+      });
+
+      keys.forEach(k => {
+        const arr = groups.get(k) || [];
+        // Sort within the day: earliest time on top
+        arr.sort((a,b) => msForTab_(a) - msForTab_(b));
+
+        const header = document.createElement("div");
+        header.className = "dayGroupHeader";
+        header.setAttribute("role", "button");
+        header.setAttribute("tabindex", "0");
+        header.dataset.daykey = k;
+
+        const collapsed = isCollapsed_(k);
+        header.innerHTML = `
+          <div class="dayGroupLeft">
+            <span class="dayGroupChevron ${collapsed ? "collapsed" : ""}">▾</span>
+            <span class="dayGroupTitle">${escapeHtml(dayLabel_(k))}</span>
+          </div>
+          <div class="dayGroupMeta">${arr.length} order(s)</div>
+        `;
+        list.appendChild(header);
+
+        const body = document.createElement("div");
+        body.className = "dayGroupBody";
+        body.dataset.daykey = k;
+        body.style.display = collapsed ? "none" : "block";
+        list.appendChild(body);
+
+        arr.forEach(o => body.appendChild(buildCard_(o)));
+
+        const toggle_ = () => {
+          const nowCollapsed = body.style.display !== "none";
+          body.style.display = nowCollapsed ? "none" : "block";
+          const chev = header.querySelector(".dayGroupChevron");
+          if (chev) chev.classList.toggle("collapsed", nowCollapsed);
+          setCollapsed_(k, nowCollapsed);
+        };
+
+        header.addEventListener("click", toggle_);
+        header.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle_(); }
+        });
+      });
+
+      return;
+    }
+
+    // Flat list fallback
+    (orders || []).forEach(o => list.appendChild(buildCard_(o)));
   }
 
   function filterOrders_(orders) {
@@ -785,9 +930,7 @@ function filterByTab_(orders){
         const ms = msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
         return ms >= cutoff;
       });
-    }
-if (currentTab === "ready") return arr.filter(isReady_);
-    return arr.filter(isOpen_); // open tab
+    }return arr.filter(isOpen_); // open tab
   }
 
   function formatSRD(v) {
@@ -851,11 +994,8 @@ if (currentTab === "ready") return arr.filter(isReady_);
   function updateAllBadgesFromOpenList_(openList){
     const arr = Array.isArray(openList) ? openList : [];
     const openCount = arr.filter(isOpen_).length;
-    const readyCount = arr.filter(isReady_).length;
     tabCountCache.open = openCount;
-    tabCountCache.ready = readyCount;
     updateTabBadge_("open", openCount);
-    updateTabBadge_("ready", readyCount);
   }
 
     function applyTabView_(opts = {}) {
@@ -886,13 +1026,10 @@ if (currentTab === "ready") return arr.filter(isReady_);
 
       cacheOpen = res.orders || [];
       openPool = sortNewestFirst_(cacheOpen);
-// Update open/ready badges from cached dataset
+// Update Open badge from cached dataset
       const openCount = openPool.filter(isOpen_).length;
-      const readyCount = openPool.filter(isReady_).length;
       tabCountCache.open = openCount;
-      tabCountCache.ready = readyCount;
       updateTabBadge_("open", openCount);
-      updateTabBadge_("ready", readyCount);
 
       openDirty = false;
     openVersion += 1;
@@ -948,14 +1085,12 @@ async function loadOrders() {
   }
 
 function setTab(tab) {
-    const next = (tab === "closed" || tab === "ready") ? tab : "open";
+    const next = (tab === "closed") ? "closed" : "open";
     currentTab = next;
 
     const openBtn = document.getElementById("tabOpen");
-    const readyBtn = document.getElementById("tabReady");
     const closedBtn = document.getElementById("tabClosed");
     if (openBtn) openBtn.classList.toggle("active", currentTab === "open");
-    if (readyBtn) readyBtn.classList.toggle("active", currentTab === "ready");
     if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
 
     // Instant feedback using cache when available (no refetch, avoid rebuild)
@@ -967,23 +1102,23 @@ function setTab(tab) {
     if (currentTab === "closed" && cacheClosed) {
       lastOrders = filterClosed_(cacheClosed);
       renderCurrent_();
-    } else if ((currentTab === "open" || currentTab === "ready") && cacheOpen) {
+    } else if (currentTab === "open" && cacheOpen) {
       lastOrders = filterByTab_(cacheOpen);
       renderCurrent_();
     }
-
   }
 
 
   function updateTabBadge_(tab, count) {
     try {
-      const t = (tab === "ready") ? "ready" : ((tab === "closed") ? "closed" : "open");
+      const t = (tab === "closed") ? "closed" : "open";
       const n = (typeof count === "number") ? count : 0;
-      const id = (t === "open") ? "badgeOpen" : (t === "ready" ? "badgeReady" : "badgeClosed");
+      const id = (t === "open") ? "badgeOpen" : "badgeClosed";
       const el = document.getElementById(id);
       if (el) el.textContent = String(n);
     } catch (e) {}
   }
+
 
   // --- Order detail ---
   async function openOrder(orderNumber) {
@@ -1155,7 +1290,6 @@ settingsModal.classList.remove("show");
   }
 
   document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("open"); });
-  document.getElementById("tabReady").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("ready"); });
   document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("closed"); });
 
   document.getElementById("btnRefresh").onclick = async () => { await safeLoadOrders(); refreshTabCount_("open"); refreshTabCount_("closed"); };
@@ -1166,7 +1300,6 @@ settingsModal.classList.remove("show");
     } catch (e) {
       document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
       (document.getElementById("listOpen")||{}).innerHTML = "";
-      (document.getElementById("listReady")||{}).innerHTML = "";
       (document.getElementById("listClosed")||{}).innerHTML = "";
     }
   }
@@ -1192,6 +1325,22 @@ function computePickComplete_(checks) {
 }
 
 
+// Defensive: derive pick completion from current state (PickChecks or DOM)
+// This prevents the "Afgehandeld" button from staying disabled if PickComplete isn't refreshed correctly.
+function pickCompleteNow_(){
+  try{
+    if(currentOrder && Array.isArray(currentOrder.PickChecks)){
+      return computePickComplete_(currentOrder.PickChecks);
+    }
+    const boxes = Array.from(document.querySelectorAll('#odItems .pickCb'));
+    if(!boxes.length) return false;
+    return boxes.every(b => !!b.checked);
+  }catch(e){
+    return !!(currentOrder && currentOrder.PickComplete);
+  }
+}
+
+
   function initPickState_(orderObj) {
     const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
     pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
@@ -1203,7 +1352,8 @@ function computePickComplete_(checks) {
     const el = document.getElementById("odPickStatus");
     if (!el) return;
     if (!currentOrder) { el.textContent = ""; return; }
-    const done = !!currentOrder.PickComplete;
+    const done = pickCompleteNow_();
+    currentOrder.PickComplete = done;
     el.textContent = done ? "Pick: Complete ✅" : "Pick: Incompleet";
     updateOrderActionsUI_();
   }
@@ -1221,8 +1371,10 @@ function computePickComplete_(checks) {
     }
 
     const st = String(currentOrder.OrderStatus || "").trim() || "Open";
-    const alreadyClosed = (st === "Closed" || st === "Cancelled");
-    const pickComplete = !!currentOrder.PickComplete;
+    const stNorm = st.toLowerCase();
+    const alreadyClosed = (stNorm === "closed" || stNorm === "cancelled" || stNorm === "delivered" || stNorm === "pickedup");
+    const pickComplete = pickCompleteNow_();
+    currentOrder.PickComplete = pickComplete;
 
     hint.textContent = `Status: ${st}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
     btnDone.disabled = alreadyClosed || !pickComplete;
@@ -1235,7 +1387,108 @@ function computePickComplete_(checks) {
     if (note) note.value = "";
   }
 
-  async function setOrderStatus_(status, note) {
+  
+  // Optimistic UI updates for status changes (move cards between tabs without refetch)
+  function optimisticStatusUpdate_(orderNumber, patch, apiPromise, successMsg){
+    const ord = String(orderNumber || "").trim();
+    if(!ord) return;
+
+    // Snapshot for rollback
+    const prevOpen = Array.isArray(openPool) ? openPool.slice() : [];
+    const prevClosed = Array.isArray(closedPool) ? closedPool.slice() : [];
+
+    const nowIso = new Date().toISOString();
+
+    const applyPatch_ = (obj) => Object.assign({}, obj || {}, patch || {}, { StatusUpdatedAt: nowIso });
+
+    try{
+      const idxOpen = openPool.findIndex(o => String(o && o.OrderNumber) === ord);
+      const idxClosed = closedPool.findIndex(o => String(o && o.OrderNumber) === ord);
+
+      if(idxOpen >= 0){
+        const next = applyPatch_(openPool[idxOpen]);
+        if(isClosedLike_(next)){
+          openPool.splice(idxOpen, 1);
+          if(idxClosed >= 0) closedPool.splice(idxClosed, 1);
+          closedPool.unshift(next);
+          closedPool = sortNewestFirst_(closedPool);
+        }else{
+          openPool[idxOpen] = next;
+          openPool = sortNewestFirst_(openPool);
+        }
+      }else if(idxClosed >= 0){
+        const next = applyPatch_(closedPool[idxClosed]);
+        if(isClosedLike_(next)){
+          closedPool[idxClosed] = next;
+          closedPool = sortNewestFirst_(closedPool);
+        }else{
+          closedPool.splice(idxClosed, 1);
+          openPool.unshift(next);
+          openPool = sortNewestFirst_(openPool);
+        }
+      }
+
+      // Keep modal state consistent
+      if(currentOrder && String(currentOrder.OrderNumber) === ord){
+        currentOrder = applyPatch_(currentOrder);
+        const stEl = document.getElementById("odPickStatus");
+        if(stEl) stEl.textContent = (currentOrder.OrderStatus || "");
+      }
+
+      // Badges + re-render
+      updateAllBadgesFromOpenList_(openPool);
+      const closedCount = filterClosed_(closedPool).length;
+      tabCountCache.closed = closedCount;
+      updateTabBadge_("closed", closedCount);
+
+      renderSigByTab.open = null;
+      renderSigByTab.ready = null;
+      renderSigByTab.closed = null;
+
+      applyTabView_({ prefetch: false });
+
+    }catch(e){
+      // If something goes wrong, revert immediately
+      openPool = prevOpen;
+      closedPool = prevClosed;
+      updateAllBadgesFromOpenList_(openPool);
+      const closedCount = filterClosed_(closedPool).length;
+      tabCountCache.closed = closedCount;
+      updateTabBadge_("closed", closedCount);
+      renderSigByTab.open = null;
+      renderSigByTab.ready = null;
+      renderSigByTab.closed = null;
+      applyTabView_({ prefetch: false });
+    }
+
+    Promise.resolve(apiPromise).then(() => {
+      const resEl = document.getElementById("odActionResult");
+      if(resEl && successMsg) resEl.textContent = String(successMsg);
+    }).catch(async (err) => {
+      // Rollback and reconcile
+      openPool = prevOpen;
+      closedPool = prevClosed;
+
+      updateAllBadgesFromOpenList_(openPool);
+      const closedCount = filterClosed_(closedPool).length;
+      tabCountCache.closed = closedCount;
+      updateTabBadge_("closed", closedCount);
+
+      renderSigByTab.open = null;
+      renderSigByTab.ready = null;
+      renderSigByTab.closed = null;
+      applyTabView_({ prefetch: false });
+
+      const resEl = document.getElementById("odActionResult");
+      if(resEl) resEl.textContent = "❌ " + (err && err.message ? err.message : String(err));
+
+      // Mark dirty so a manual refresh can fix any server-side derived fields
+      openDirty = true;
+      closedDirty = true;
+    });
+  }
+
+async function setOrderStatus_(status, note) {
   if (!currentOrder) throw new Error("No order selected");
   const orderNumber = String(currentOrder.OrderNumber || "").trim();
   if (!orderNumber) throw new Error("Missing OrderNumber");
