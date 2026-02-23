@@ -823,8 +823,8 @@ function msFromAny_(v){
 
       keys.forEach(k => {
         const arr = groups.get(k) || [];
-        // Sort within the day: earliest time on top
-        arr.sort((a,b) => msForTab_(a) - msForTab_(b));
+        // Sort within the day: newest time on top
+        arr.sort((a,b) => msForTab_(b) - msForTab_(a));
 
         const header = document.createElement("div");
         header.className = "dayGroupHeader";
