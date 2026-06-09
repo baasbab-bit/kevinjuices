@@ -3,469 +3,174 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pick Queue (Phase 1)</title>
+  <title>Pick Queue</title>
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    body { margin: 0; background:#f6f7f9; color:#111; }
-    header { position: sticky; top:0; background:#fff; border-bottom:1px solid #e6e6e6; padding:12px 14px; display:flex; gap:10px; align-items:center; z-index: 1000; }
-
-    header h1 { font-size:16px; margin:0; font-weight:700; }
-    .grow { flex:1; }
-    .btn { border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:600; }
-    .btn:active { transform: translateY(1px); }
-    .btn[disabled] { opacity: .45; cursor: not-allowed; }
-    .muted { color:#666; font-size:12px; }
-    .tabs {
-      display:flex;
-      gap:0;
-      padding:0 14px;
-      background:#fff;
-      border-bottom:1px solid #e6e6e6;
-    }
-    .tab {
-      flex:1;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      padding:12px 10px;
-      border:0;
-      border-bottom:3px solid transparent;
-      border-radius:0;
-      background:transparent;
-      cursor:pointer;
-      font-weight:800;
-      color:#667085;
-    }
-    .tab.active {
-      color: var(--wa-green, #128C7E);
-      border-bottom-color: var(--wa-green, #128C7E);
-      background:transparent;
+    :root{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      --wa-header:#075E54;
+      --wa-accent:#25D366;
+      --wa-accent-2:#128C7E;
+      --wa-bg:#E9F5EF;
+      --wa-card:#FFFFFF;
+      --wa-text:#0b1b14;
+      --wa-muted:rgba(11,27,20,.62);
+      --wa-border:rgba(11,27,20,.10);
+      --wa-shadow:0 6px 18px rgba(0,0,0,.06);
     }
 
-    /* Badges + loading spinner */
-    .badge { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:18px; padding:0 6px;
-      border-radius:999px; font-size:12px; font-weight:800; background:#f1f2f4; color:#111; border:1px solid #e1e3e6; margin-left:8px; }
-    .tab.active .badge { background:rgba(255,255,255,.18); color:#fff; border-color:rgba(255,255,255,.25); }
-
-    .spinner { width:14px; height:14px; margin-left:8px; border-radius:999px; border:2px solid rgba(0,0,0,.15); border-top-color: rgba(0,0,0,.55);
-      display:none; animation: spin 0.8s linear infinite; }
-    .btn.loading .spinner { display:inline-block; }
-    .btn.loading { opacity:.75; cursor:progress; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-.wrap { padding: 0 14px 18px; }
-    .grid { display:grid; grid-template-columns:1fr; gap:10px; }
-    .card { background:#fff; border:1px solid #e6e6e6; border-radius:14px; padding:12px; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .15s ease, transform .06s ease; }
-    .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); }
-    .card:active { transform: translateY(1px); }
-    @media (hover:none) { .card:hover { box-shadow: 0 1px 2px rgba(0,0,0,.04); } }
-
-
-    /* Card status accents */
-    .card { position: relative; overflow: hidden; }
-    .card::before {
-      content:"";
-      position:absolute; left:0; top:0; bottom:0;
-      width:4px;
-      background:#d1d5db;
+    body{ margin:0; background:var(--wa-bg); color:var(--wa-text); }
+    header{
+      position:sticky; top:0; z-index:50;
+      background:linear-gradient(90deg,#075E54,#128C7E);
+      color:#fff; border-bottom:1px solid rgba(255,255,255,.12);
+      padding:12px 14px; display:flex; gap:10px; align-items:center;
     }
-    .card[data-status="open"]::before { background:#2563eb; }
-    .card[data-status="closed"]::before { background:#16a34a; }
-    .card[data-status="delivered"]::before { background:#16a34a; }
-    .card[data-status="pickedup"]::before { background:#16a34a; }
-    .card[data-status="cancelled"]::before { background:#dc2626; }
+    header h1{ font-size:16px; margin:0; font-weight:900; color:#fff; }
+    .grow{ flex:1; }
+    .muted{ color:var(--wa-muted); font-size:12px; }
+    header .muted{ color:rgba(255,255,255,.84); }
 
-    .card[data-status="cancelled"]{ background:#fff7f7; border-color:#ffd6d6; }
-    .card[data-status="closed"],
-    .card[data-status="delivered"],
-    .card[data-status="pickedup"]{ background:#f6fffa; border-color:#c9f3da; }
-
-    /* Slightly tighter typography on mobile */
-    @media (max-width: 520px){
-      .card { padding: 10px; border-radius: 14px; }
-      .ordno { font-size: 14px; }
-      .total { font-size: 14px; }
-      .name { font-size: 13px; }
-      .cardDt { white-space:nowrap; color:#666; font-size:12px; }
-      .pills { gap:6px; }
-      .pill { font-size: 11px; padding:3px 7px; }
+    .btn{
+      border:1px solid #ddd; background:#fff; padding:8px 10px;
+      border-radius:10px; cursor:pointer; font-weight:800;
     }
-    .topline { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
-
-    /* Card header layout (Option D compact) */
-    .cardHead { display:flex; flex-direction:column; gap:6px; }
-    .cardRow1 { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
-    .cardRow2 { display:flex; align-items:baseline; gap:8px; justify-content:flex-start; flex-wrap:wrap; }
-    .cardDt { white-space:nowrap; }
-    @media (max-width: 480px) {
-      .cardRow2 { gap:8px; }
-      .cardDt { font-size:11px; }
-    }
-    .ordno { font-weight:900; }
-    .name { font-weight:700; margin-top:4px; }
-    .total { font-weight:900; }
-    .pills { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
-    .pill { font-size:12px; border:1px solid #ddd; padding:4px 8px; border-radius:999px; background:#fafafa; }
-    .pill.ok { border-color:#bfe6c6; background:#f1fbf3; }
-    .pill.warn { border-color:#ffe2a8; background:#fff8e8; }
-    .pill.bad { border-color:#ffb5b5; background:#fff0f0; }
-
-
-    /* WA pill icons */
-    .pill.wa { display:inline-flex; align-items:center; gap:6px; }
-    .pill.wa .ico { width:14px; height:14px; display:inline-block; }
-    .pill.wa.ok { border-color:#bfe6c6; background:#f1fbf3; }
-    .pill.wa.warn { border-color:#ffe2a8; background:#fff8e8; }
-    .pill.wa svg { fill: currentColor; }
-/* Modal */
-    .modalBackdrop { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; }
-    .modalBackdrop.show { display:flex; }
-    .sheet { width:100%; max-width:780px; margin: 0 auto; background:#fff; border-radius:18px 18px 0 0; padding:14px; max-height: 88vh; overflow:auto; }
-    .row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
-    .sheet h2 { margin:0; font-size:16px; }
-    .close { border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:800; }
-    .sec { margin-top:12px; border-top:1px solid #eee; padding-top:12px; }
-    .kv { display:grid; grid-template-columns: 120px 1fr; gap:6px 12px; font-size:13px; }
-    .kv div { padding:2px 0; }
-    .items { display:flex; flex-direction:column; gap:10px; }
-    .item { display:flex; gap:10px; border:1px solid #eee; border-radius:12px; padding:10px; }
-
-    .pickCb { width:18px; height:18px; margin-top:4px; }
-    .pickCol { display:flex; align-items:flex-start; }
-
-    .thumb { width:54px; height:54px; border-radius:10px; background:#f1f1f1; object-fit:cover; flex: 0 0 54px; }
-    .itName { font-weight:800; }
-    .itOpt { font-size:12px; color:#666; margin-top:2px; }
-    .itQty { font-weight:900; margin-right:6px; }
-    .toolbar { display:flex; gap:8px; align-items:center; }
-    .input { padding:8px 10px; border:1px solid #ddd; border-radius:10px; width: 420px; max-width: 52vw; }
-    .statusDot { width:10px; height:10px; border-radius:999px; background:#bbb; display:inline-block; margin-right:8px; }
-    .okDot { background:#2ecc71; }
-    .badDot { background:#e74c3c; }
-
-
-/* --- Mobile optimization (CSS-only) --- */
-@media (max-width: 640px) {
-  header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
-  header h1 { font-size: 14px; }
-
-  /* Put search on its own line, full width */
-  #searchBox { width: 100% !important; max-width: none !important; flex: 1 1 100%; order: 3; }
-
-  /* Build info becomes smaller and wraps */
-  #buildInfo { flex: 1 1 100%; order: 4; font-size: 11px; }
-
-  /* Buttons a bit smaller */
-  .btn { padding: 7px 9px; border-radius: 12px; font-size: 12px; }
-  .close { padding: 7px 9px; border-radius: 12px; font-size: 12px; }
-
-  .tabs { padding: 10px 12px; gap: 8px; }
-  .tab { padding: 8px 12px; font-size: 13px; }
-
-  .wrap { padding: 0 12px 16px; }
-  .grid { gap: 10px; }
-
-  /* Cards: stack price/date under the name */
-  .card { padding: 10px; border-radius: 16px; }
-  .topline { flex-direction: column; align-items: flex-start; }
-  .total { margin-top: 6px; }
-
-  .pills { gap: 6px; }
-  .pill { font-size: 11px; padding: 4px 8px; }
-
-  /* Modals / bottom sheet: use more of the screen */
-  .modalBackdrop { align-items: stretch; }
-  .sheet { max-height: 92vh; padding: 12px; border-radius: 16px 16px 0 0; }
-
-  /* Key/value table: narrower label column */
-  .kv { grid-template-columns: 92px 1fr; font-size: 12px; }
-
-  /* Inputs full width */
-  .input { width: 100%; max-width: none; }
-
-  /* Items: reduce thumbnail, allow long names to wrap */
-  .item { padding: 8px; gap: 8px; }
-  .thumb { width: 44px; height: 44px; border-radius: 10px; }
-  .itName { font-size: 13px; word-break: break-word; }
-  .itOpt { font-size: 11px; }
-  .pickCb { width: 20px; height: 20px; margin-top: 2px; }
-}
-
-
-    /* --- Mobile compact card layout (Option D) --- */
-    @media (max-width: 520px) {
-      header { padding: 10px 12px; gap: 8px; }
-      .tabs { padding: 10px 12px; gap: 6px; }
-      .wrap { padding: 0 12px 14px; }
-
-      .card { padding: 10px; border-radius: 14px; }
-      .topline { display: flex; flex-direction: column; gap: 6px; }
-
-      /* Line 1: Order + Customer in one compact line */
-      .leftCol { line-height: 1.2; }
-      .leftCol .ordno { display: inline; font-size: 14px; }
-      .leftCol .name { display: inline; font-size: 14px; margin-top: 0; font-weight: 700; }
-      .leftCol .name:before { content: "  "; }
-
-      /* Line 2: Amount + Date on one line */
-      .rightCol { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
-      .rightCol .total { font-size: 14px; font-weight: 900; }
-      .rightCol .muted { font-size: 12px; }
-
-      /* Pills become compact badges */
-      .pills { margin-top: 8px; gap: 6px; }
-      .pill { font-size: 11px; padding: 3px 7px; border-radius: 999px; }
+    .btn:active{ transform:translateY(1px); }
+    .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+    header .btn{
+      background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.28); color:#fff;
     }
 
-
-    /* --- Step 5: Mobile polish (CSS-only) --- */
-    /* Safer layering: modals must always sit above cards on mobile */
-    .modalBackdrop { z-index: 1000; }
-    .sheet { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
-
-    /* Better tap feedback */
-    .card:active { transform: translateY(1px); }
-
-    /* Mobile-first refinements */
-    @media (max-width: 520px) {
-      body { background:#f4f6f8; }
-      header {
-        padding: 10px 12px;
-        gap: 8px;
-      }
-      header h1 { font-size: 18px; }
-      /* Make right side less cramped */
-      #buildInfo { font-size: 11px; line-height: 1.2; }
-
-      .btn {
-        padding: 9px 12px;
-        border-radius: 12px;
-      }
-
-      .tabs { padding: 10px 12px; gap: 10px; }
-      .tab { padding: 10px 14px; border-radius: 14px 14px 0 0; }
-
-      .wrap { padding: 0 12px 18px; }
-      .grid { gap: 12px; }
-
-      .card {
-        border-radius: 18px;
-        padding: 12px;
-        border-color: rgba(0,0,0,.08);
-        box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 10px 24px rgba(0,0,0,.05);
-      }
-
-      /* Keep the top line readable */
-      .ordno { font-size: 20px; letter-spacing: .2px; }
-      .total { font-size: 20px; }
-      .name { font-size: 18px; line-height: 1.15; }
-
-      /* Prevent long names from breaking layout */
-      .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-      .pills { gap: 6px; margin-top: 10px; }
-      .pill { padding: 6px 10px; font-size: 12px; }
-
-      /* Reduce visual noise for hint/debug line */
-      #hint { font-size: 12px; color: #7a7a7a; }
+    .input{
+      padding:8px 10px; border:1px solid #ddd; border-radius:10px;
+      width:420px; max-width:52vw;
+    }
+    header .input{
+      background:rgba(255,255,255,.96); color:#111; border-color:rgba(0,0,0,.10);
+      box-shadow:0 2px 10px rgba(0,0,0,.10);
     }
 
-/* ===== WhatsApp theme readability hotfix (override) ===== */
-header{
-  background: linear-gradient(90deg, #075E54, #128C7E) !important;
-  color:#fff !important;
-}
-header h1{ color:#fff !important; }
-#buildInfo{ color: rgba(255,255,255,.85) !important; }
-header .muted{ color: rgba(255,255,255,.82) !important; }
+    .tabs{
+      display:flex; gap:8px; padding:10px 14px;
+      background:linear-gradient(90deg,#075E54,#128C7E);
+      position:sticky; top:52px; z-index:49;
+      border-bottom:1px solid rgba(255,255,255,.15);
+    }
+    .tab{
+      flex:1; display:flex; align-items:center; justify-content:center; gap:8px;
+      padding:10px 12px; border:1px solid rgba(255,255,255,.28);
+      border-radius:14px 14px 0 0; background:rgba(255,255,255,.14);
+      color:#fff; cursor:pointer; font-weight:900;
+    }
+    .tab.active{ background:#25D366; border-color:#25D366; color:#0b2b22; }
+    .badge{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:20px; height:18px; padding:0 6px; border-radius:999px;
+      font-size:12px; font-weight:900; background:rgba(255,255,255,.18);
+      color:inherit; border:1px solid rgba(255,255,255,.25);
+    }
 
-/* Header buttons (Settings/Refresh) */
-header .btn{
-  background: rgba(255,255,255,.14) !important;
-  border-color: rgba(255,255,255,.28) !important;
-  color:#fff !important;
-}
-header .btn:hover{ background: rgba(255,255,255,.20) !important; }
-header .btn[disabled]{ opacity:.55 !important; }
+    .spinner{
+      width:14px; height:14px; margin-left:8px; border-radius:999px;
+      border:2px solid rgba(255,255,255,.25); border-top-color:#fff;
+      display:none; animation:spin .8s linear infinite;
+    }
+    .btn.loading .spinner{ display:inline-block; }
+    .btn.loading{ opacity:.75; cursor:progress; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
 
-/* Search input: keep high contrast on dark header */
-header input,
-header .input,
-#searchInput{
-  background: rgba(255,255,255,.96) !important;
-  color:#111 !important;
-  border-color: rgba(0,0,0,.10) !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,.10) !important;
-}
-header input::placeholder,
-header .input::placeholder,
-#searchInput::placeholder{
-  color:#6b7280 !important;
-}
+    .wrap{ padding:0 14px 18px; }
+    .grid{ display:grid; grid-template-columns:1fr; gap:10px; }
+    .card{
+      position:relative; overflow:hidden; background:var(--wa-card);
+      border:1px solid var(--wa-border); border-radius:18px;
+      box-shadow:var(--wa-shadow); padding:14px 14px 12px 18px;
+      cursor:pointer; transition:box-shadow .15s ease, transform .06s ease;
+    }
+    .card:hover{ box-shadow:0 8px 22px rgba(0,0,0,.08); }
+    .card:active{ transform:translateY(1px); }
+    .card::before{
+      content:""; position:absolute; left:0; top:0; bottom:0; width:6px;
+      background:var(--accent,var(--wa-accent));
+    }
+    .card[data-workflow="PICK"]{ --accent:#2563eb; }
+    .card[data-workflow="READY"]{ --accent:#25D366; }
+    .card[data-workflow="HANDLED"]{ --accent:#128C7E; opacity:.92; }
 
-/* Tabs band should not get covered and should feel connected */
-.tabs{
-  background: linear-gradient(90deg, #075E54, #128C7E) !important;
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
-  position: sticky;
-  top: 52px; /* keep below header */
-  z-index: 40;
-}
-.tab{
-  background: rgba(255,255,255,.14) !important;
-  border-color: rgba(255,255,255,.28) !important;
-  color:#fff !important;
-}
-.tab.active{
-  background: #25D366 !important;
-  border-color: #25D366 !important;
-  color:#0b2b22 !important;
-}
+    .cardRow1{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+    .cardRow2{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin-top:6px; }
+    .ordno{ font-weight:950; letter-spacing:.2px; }
+    .total{ font-weight:950; white-space:nowrap; }
+    .name{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cardDt{ white-space:nowrap; font-variant-numeric:tabular-nums; }
 
-/* === WhatsApp vibe: card theme (readable) === */
-:root{
-  --wa-header:#075E54;
-  --wa-accent:#25D366;
-  --wa-accent-2:#128C7E;
-  --wa-bg:#E9F5EF;
-  --wa-card:#FFFFFF;
-  --wa-text:#0b1b14;
-  --wa-muted:rgba(11,27,20,.62);
-  --wa-border:rgba(11,27,20,.10);
-  --wa-shadow:0 6px 18px rgba(0,0,0,.06);
-}
+    .pills{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill{
+      font-size:12px; border:1px solid rgba(11,27,20,.12);
+      padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.65);
+    }
+    .pill.ok{ border-color:rgba(37,211,102,.35); background:rgba(37,211,102,.12); }
+    .pill.warn{ border-color:rgba(255,194,66,.45); background:rgba(255,194,66,.14); }
+    .pill.bad{ border-color:rgba(231,76,60,.40); background:rgba(231,76,60,.12); }
 
-body{ background: var(--wa-bg); color: var(--wa-text); }
-.muted{ color: var(--wa-muted); }
+    .dayGroupHeader{
+      display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+      padding:8px 10px; margin-top:8px; border:1px solid rgba(0,0,0,.08);
+      border-radius:14px; background:rgba(255,255,255,.70); cursor:pointer; user-select:none;
+    }
+    .dayGroupLeft{ display:flex; align-items:baseline; gap:8px; min-width:0; }
+    .dayGroupChevron{ display:inline-block; width:16px; text-align:center; font-weight:900; color:rgba(11,27,20,.60); transition:transform .12s ease; }
+    .dayGroupChevron.collapsed{ transform:rotate(-90deg); }
+    .dayGroupTitle{ font-weight:950; font-size:13px; color:rgba(11,27,20,.80); text-transform:capitalize; }
+    .dayGroupMeta{ font-size:12px; color:rgba(11,27,20,.55); font-weight:900; white-space:nowrap; }
 
-/* Cards */
-.card{
-  position:relative;
-  background: var(--wa-card);
-  border:1px solid var(--wa-border);
-  border-radius:18px;
-  box-shadow: var(--wa-shadow);
-  padding:14px 14px 12px 18px; /* extra left room for accent bar */
-  overflow:hidden;
-}
-.card::before{
-  content:"";
-  position:absolute;
-  left:0; top:0; bottom:0;
-  width:6px;
-  background: var(--accent, var(--wa-accent));
-}
-.card[data-status="open"]{ --accent: var(--wa-accent); }
-.card[data-status="closed"]{ --accent: var(--wa-accent-2); }
-.card[data-status="cancelled"]{ --accent: #e74c3c; }
+    .modalBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; z-index:1000; }
+    .modalBackdrop.show{ display:flex; }
+    .sheet{
+      width:100%; max-width:780px; margin:0 auto; background:#fff;
+      border-radius:18px 18px 0 0; padding:14px;
+      max-height:88vh; overflow:auto; padding-bottom:max(14px,env(safe-area-inset-bottom));
+    }
+    .row{ display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .sheet h2{ margin:0; font-size:16px; }
+    .close{ border:1px solid #ddd; background:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; font-weight:900; }
+    .sec{ margin-top:12px; border-top:1px solid #eee; padding-top:12px; }
+    .kv{ display:grid; grid-template-columns:120px 1fr; gap:6px 12px; font-size:13px; }
+    .kv div{ padding:2px 0; }
+    .items{ display:flex; flex-direction:column; gap:10px; }
+    .item{ display:flex; gap:10px; border:1px solid #eee; border-radius:12px; padding:10px; }
+    .pickCb{ width:20px; height:20px; margin-top:3px; }
+    .pickCol{ display:flex; align-items:flex-start; }
+    .thumb{ width:54px; height:54px; border-radius:10px; background:#f1f1f1; object-fit:cover; flex:0 0 54px; }
+    .itName{ font-weight:900; }
+    .itOpt{ font-size:12px; color:#666; margin-top:2px; }
+    .itQty{ font-weight:950; margin-right:6px; }
 
-.cardHead{ display:block; }
-.cardRow1{
-  display:flex;
-  align-items:baseline;
-  justify-content:space-between;
-  gap:12px;
-}
-.cardRow2{
-  display:flex;
-  align-items:baseline;
-  justify-content:space-between;
-  gap:10px;
-  margin-top:6px;
-}
-.ordno{ letter-spacing:.2px; }
-.total{ font-weight:900; }
-.cardDt{ font-variant-numeric: tabular-nums; }
-
-.pills{ margin-top:10px; gap:8px; }
-.pill{
-  border-color: rgba(11,27,20,.12);
-  background: rgba(255,255,255,.65);
-}
-.pill.ok{
-  border-color: rgba(37,211,102,.35);
-  background: rgba(37,211,102,.12);
-}
-.pill.warn{
-  border-color: rgba(255,194,66,.45);
-  background: rgba(255,194,66,.14);
-}
-.pill.bad{
-  border-color: rgba(231,76,60,.40);
-  background: rgba(231,76,60,.12);
-}
-
-/* Touch feedback */
-.card:active{ transform: translateY(1px); }
-
-/* Mobile tuning */
-@media (max-width: 520px){
-  .wrap{ padding-left:12px; padding-right:12px; }
-  .card{ padding:12px 12px 10px 16px; border-radius:16px; }
-  .card::before{ width:5px; }
-  .pills{ margin-top:8px; }
-  .pill{ font-size:12px; padding:5px 10px; }
-}
-
-  /* Ensure header/tabs remain above cards while scrolling */
-  header{ z-index: 50; }
-  .tabs{ z-index: 49; }
-
-  
-/* Closed tab day grouping */
-.dayGroupHeader{
-  display:flex;
-  justify-content:space-between;
-  align-items:baseline;
-  gap:10px;
-  padding:8px 10px;
-  margin-top:8px;
-  border:1px solid rgba(0,0,0,.08);
-  border-radius:14px;
-  background: rgba(255,255,255,.70);
-  backdrop-filter: blur(6px);
-}
-.dayGroupTitle{
-  font-weight:900;
-  font-size:13px;
-  color: rgba(11,27,20,.80);
-  text-transform: capitalize;
-}
-.dayGroupMeta{
-  font-size:12px;
-  color: rgba(11,27,20,.55);
-  font-weight:800;
-  white-space:nowrap;
-}
-
-/* Day grouping (Open + Closed) with collapsible sections */
-.dayGroupHeader{
-  cursor:pointer;
-  user-select:none;
-}
-.dayGroupLeft{
-  display:flex;
-  align-items:baseline;
-  gap:8px;
-  min-width: 0;
-}
-.dayGroupChevron{
-  display:inline-block;
-  width: 16px;
-  text-align:center;
-  font-weight:900;
-  color: rgba(11,27,20,.60);
-  transform: rotate(0deg);
-  transition: transform .12s ease;
-}
-.dayGroupChevron.collapsed{
-  transform: rotate(-90deg);
-}
-.dayGroupBody{
-  padding-left: 0;
-}
-</style>
+    @media (max-width:640px){
+      header{ flex-wrap:wrap; gap:8px; padding:10px 12px; }
+      header h1{ font-size:18px; }
+      #searchBox{ width:100% !important; max-width:none !important; flex:1 1 100%; order:3; }
+      #buildInfo{ flex:1 1 100%; order:4; font-size:11px; line-height:1.2; }
+      .btn,.close{ padding:8px 10px; border-radius:12px; font-size:12px; }
+      .tabs{ top:100px; padding:8px 12px; gap:6px; }
+      .tab{ padding:9px 8px; font-size:13px; }
+      .wrap{ padding:0 12px 16px; }
+      .grid{ gap:10px; }
+      .card{ padding:12px 12px 10px 16px; border-radius:16px; }
+      .card::before{ width:5px; }
+      .ordno,.total{ font-size:14px; }
+      .name{ font-size:14px; }
+      .cardDt{ font-size:11px; }
+      .pill{ font-size:11px; padding:4px 8px; }
+      .modalBackdrop{ align-items:stretch; }
+      .sheet{ max-height:92vh; padding:12px; border-radius:16px 16px 0 0; }
+      .kv{ grid-template-columns:92px 1fr; font-size:12px; }
+      .input{ width:100%; max-width:none; }
+      .item{ padding:8px; gap:8px; }
+      .thumb{ width:44px; height:44px; border-radius:10px; }
+      .itName{ font-size:13px; word-break:break-word; }
+      .itOpt{ font-size:11px; }
+    }
+  </style>
 </head>
 <body>
   <header>
@@ -478,18 +183,19 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
   </header>
 
   <div class="tabs">
-    <button class="tab active" data-tab="open" id="tabOpen">Open<span class="badge" id="badgeOpen">0</span></button>
-    <button class="tab" data-tab="closed" id="tabClosed">Afgehandeld<span class="badge" id="badgeClosed">0</span></button>
+    <button class="tab active" data-tab="pick" id="tabPick">Pick<span class="badge" id="badgePick">0</span></button>
+    <button class="tab" data-tab="ready" id="tabReady">Ready<span class="badge" id="badgeReady">0</span></button>
+    <button class="tab" data-tab="handled" id="tabHandled">Handled<span class="badge" id="badgeHandled">0</span></button>
   </div>
 
   <div class="wrap">
     <div class="muted" id="hint"></div>
     <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
-    <div class="grid" id="listOpen"></div>
-    <div class="grid" id="listClosed" style="display:none;"></div>
+    <div class="grid" id="listPick"></div>
+    <div class="grid" id="listReady" style="display:none;"></div>
+    <div class="grid" id="listHandled" style="display:none;"></div>
   </div>
 
-  <!-- Settings Modal -->
   <div class="modalBackdrop" id="settingsModal">
     <div class="sheet">
       <div class="row">
@@ -501,7 +207,7 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
           <div class="muted">API URL</div>
           <div>
             <input class="input" id="apiBase" placeholder="https://script.google.com/macros/s/.../exec" />
-            <div class="muted" style="margin-top:6px;">Tip: plak de Web App /exec URL hier.</div>
+            <div class="muted" style="margin-top:6px;">Plak de Apps Script Web App /exec URL hier.</div>
           </div>
         </div>
         <div style="margin-top:10px; display:flex; gap:8px;">
@@ -513,7 +219,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
     </div>
   </div>
 
-  <!-- Order Detail Modal -->
   <div class="modalBackdrop" id="orderModal">
     <div class="sheet">
       <div class="row">
@@ -524,10 +229,6 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
       <div class="sec">
         <div class="kv" id="odKV"></div>
       </div>
-
-      
-
-
 
       <div class="sec">
         <div class="row" style="margin-bottom:10px;">
@@ -540,126 +241,66 @@ body{ background: var(--wa-bg); color: var(--wa-text); }
 
       <div class="sec" id="odActionsSec">
         <div class="row" style="margin-bottom:10px;">
-          <strong>Afhandeling</strong>
+          <strong>Workflow</strong>
           <span class="muted" id="odStatusHint">—</span>
         </div>
-
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn" id="btnMarkDone" disabled>Afgehandeld</button>
-          <button class="btn" id="btnCancel">Cancel</button>
+          <button class="btn" id="btnMarkReady" disabled>Markeer als Ready</button>
         </div>
-
-        <div id="cancelBox" style="display:none; margin-top:10px;">
-          <div class="muted" style="margin-bottom:6px;">Reden (verplicht bij cancel)</div>
-          <textarea id="cancelNote" rows="3" style="width:100%; padding:10px; border:1px solid rgba(0,0,0,.15); border-radius:12px;"></textarea>
-          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-            <button class="btn" id="btnConfirmCancel">Bevestig Cancel</button>
-            <button class="btn" id="btnCancelBack">Terug</button>
-          </div>
-        </div>
-
         <div class="muted" id="odActionResult" style="margin-top:10px;"></div>
       </div>
-
     </div>
   </div>
 
 <script>
-  // --- Basic state ---
-  const LS_KEY = "pq_api_base_v1";
-  const DEBUG = /(?:\\?|&)debug=1(?:&|$)/.test(location.search);
+  const LS_KEY = "pq_api_base_v2";
+  const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
+  const TABS = ["pick","ready","handled"];
+  const ACTION_BY_TAB = {
+    pick: "getPickOrders",
+    ready: "getReadyOrders",
+    handled: "getHandledOrders"
+  };
 
-  let currentTab = "open";
-  
+  let currentTab = "pick";
   let currentOrder = null;
-let lastOrders = [];
-  let openPool = []; // open orders from server (includes Open + Ready subsets)
-  let closedPool = []; // closed orders from server
-  let cacheOpen = null;
-  let cacheClosed = null;
-
-
-  let openVersion = 0;
-  let closedVersion = 0;
-  const renderSigByTab = { open: null, closed: null };
-  // Cache control (prevents refetch + duplicate in-flight calls)
-  let openDirty = true;
-  let closedDirty = true;
-  let openLoading = null;   // Promise or null
-  let closedLoading = null; // Promise or null
-
-  const tabCountCache = { open: null, closed: null };
   let searchQuery = "";
-const CLOSED_LOOKBACK_DAYS_CLIENT = 7; // Afgehandeld shows last N days
-function msFromAny_(v){
-  try{
-    if (!v) return 0;
-    if (v instanceof Date) return v.getTime();
-    if (typeof v === "number") return v;
-    const t = Date.parse(String(v));
-    return isNaN(t) ? 0 : t;
-  }catch(e){ return 0; }
-}
-// Status buckets (Phase 1)
-  const CLOSED_STATUSES = new Set(["closed","delivered","pickedup","cancelled"]);
+  let pickChecks = [];
+  let pickSaveTimer = null;
 
-  function normStatus_(s){ return String(s || "").trim().toLowerCase(); }
-  function isClosedLike_(o){ return CLOSED_STATUSES.has(normStatus_(o && o.OrderStatus)); }
-  function isOpen_(o){ return !isClosedLike_(o); }
+  const pools = { pick: [], ready: [], handled: [] };
+  const cachesLoaded = { pick: false, ready: false, handled: false };
+  const dirty = { pick: true, ready: true, handled: true };
+  const loading = { pick: null, ready: null, handled: null };
+  const versions = { pick: 0, ready: 0, handled: 0 };
+  const renderSigByTab = { pick: null, ready: null, handled: null };
 
-  async function refreshTabCount_(tab) {
-    try {
-      if (tab === "closed") {
-        if (!closedDirty && Array.isArray(cacheClosed)) {
-          const count = Array.isArray(closedPool) ? closedPool.length : (cacheClosed ? cacheClosed.length : 0);
-          tabCountCache.closed = count;
-          updateTabBadge_("closed", count);
-          return;
-        }
-        const res = await api("getClosedOrders");
-        if (!res || !res.ok) return;
-        const count = Array.isArray(res.orders) ? res.orders.length : 0;
-        tabCountCache.closed = count;
-        updateTabBadge_("closed", count);
-        return;
-      }
+  const detailCache = new Map();
+  const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v2";
+  const DETAIL_PREFETCH_LIMIT = 8;
 
-      // Open = all active orders (not closed/cancelled/etc.)
-      const res = await api("getOpenOrders");
-      if (!res || !res.ok) return;
-      const arr = Array.isArray(res.orders) ? res.orders : [];
-      const openCount = arr.filter(isOpen_).length;
-      tabCountCache.open = openCount;
-      updateTabBadge_("open", openCount);
-    } catch (e) {
-      // ignore
-    }
+  function getApiBase(){
+    return (localStorage.getItem(LS_KEY) || localStorage.getItem("pq_api_base_v1") || "").trim();
   }
 
-  function getApiBase() {
-
-    return (localStorage.getItem(LS_KEY) || "").trim();
-  }
-  function normalizeApiBase_(v) {
+  function normalizeApiBase_(v){
     const raw = (v || "").trim();
     if (!raw) return "";
-    try {
+    try{
       const u = new URL(raw);
       u.search = "";
       u.hash = "";
       return u.toString();
-    } catch (e) {
-      // If it's not a valid URL, keep as-is (will error later in api())
+    }catch(e){
       return raw;
     }
   }
 
-  function setApiBase(v) {
+  function setApiBase(v){
     localStorage.setItem(LS_KEY, normalizeApiBase_(v));
   }
 
-  // --- JSONP helper ---
-  function jsonp(url) {
+  function jsonp(url){
     return new Promise((resolve, reject) => {
       const cbName = "cb_" + Math.random().toString(36).slice(2);
       const script = document.createElement("script");
@@ -673,7 +314,7 @@ function msFromAny_(v){
         cleanup();
         resolve(data);
       };
-      function cleanup() {
+      function cleanup(){
         try { delete window[cbName]; } catch(e) { window[cbName] = undefined; }
         if (script && script.parentNode) script.parentNode.removeChild(script);
       }
@@ -681,197 +322,136 @@ function msFromAny_(v){
     });
   }
 
-  function api(action, params={}) {
+  function api(action, params = {}){
     const base = getApiBase();
     if (!base) return Promise.reject(new Error("Missing API base URL. Open Settings."));
     const u = new URL(base);
-
-    // IMPORTANT: make sure we don't accidentally reuse old query params
     u.search = "";
     u.hash = "";
-
     u.searchParams.set("action", action);
-    for (const [k,v] of Object.entries(params)) u.searchParams.set(k, v);
+    for (const [k,v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) u.searchParams.set(k, v);
+    }
     return jsonp(u.toString());
   }
 
-  // --- UI render ---
-  function pill(text, kind) {
+  function msFromAny_(v){
+    try{
+      if (!v) return 0;
+      if (v instanceof Date) return v.getTime();
+      if (typeof v === "number") return v;
+      const raw = String(v).trim();
+      let t = Date.parse(raw);
+      if (!isNaN(t)) return t;
+      const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]||0)).getTime();
+      return 0;
+    }catch(e){ return 0; }
+  }
+
+  function sortNewestFirst_(orders, tab){
+    return (orders || []).slice().sort((a,b) => {
+      const ta = msForTab_(a, tab);
+      const tb = msForTab_(b, tab);
+      return tb - ta;
+    });
+  }
+
+  function msForTab_(o, tab){
+    if (tab === "handled") return msFromAny_(o && (o.HandledAt || o.ReadyAt || o.CreatedAt));
+    if (tab === "ready") return msFromAny_(o && (o.ReadyAt || o.CreatedAt));
+    return msFromAny_(o && (o.CreatedAt || o.ReadyAt || o.HandledAt));
+  }
+
+  function formatSRD(v){
+    const n = Number(v || 0);
+    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
+  }
+
+  function formatDateDisplay_(s){
+    if (!s) return "";
+    const raw = String(s).trim();
+    if (!raw) return "";
+    try{
+      const normalized = raw.indexOf("T") >= 0 ? raw : raw.replace(" ", "T");
+      const d = new Date(normalized);
+      if (!isNaN(d.getTime())) {
+        const date = d.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo" });
+        const time = d.toLocaleTimeString("nl-NL", { timeZone: "America/Paramaribo", hour: "2-digit", minute: "2-digit" });
+        return `${date} · ${time}`;
+      }
+      return raw;
+    }catch(e){ return raw; }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function pill(text, kind){
     const span = document.createElement("span");
     span.className = "pill " + (kind || "");
     span.textContent = text;
     return span;
   }
 
+  function normWorkflow_(s){
+    const x = String(s || "").trim().toUpperCase();
+    if (x === "READY") return "READY";
+    if (x === "HANDLED") return "HANDLED";
+    return "PICK";
+  }
+
+  function tabForWorkflow_(s){
+    const st = normWorkflow_(s);
+    if (st === "READY") return "ready";
+    if (st === "HANDLED") return "handled";
+    return "pick";
+  }
+
+  function displayWorkflow_(s){
+    const st = normWorkflow_(s);
+    if (st === "PICK") return "Pick";
+    if (st === "READY") return "Ready";
+    return "Handled";
+  }
+
   function getListEl_(tab){
-    if (tab === "closed") return document.getElementById("listClosed");
-    return document.getElementById("listOpen");
+    if (tab === "ready") return document.getElementById("listReady");
+    if (tab === "handled") return document.getElementById("listHandled");
+    return document.getElementById("listPick");
   }
 
   function showTabContainers_(tab){
-    const lo = document.getElementById("listOpen");
-    const lc = document.getElementById("listClosed");
-    if (lo) lo.style.display = (tab === "open") ? "grid" : "none";
-    if (lc) lc.style.display = (tab === "closed") ? "grid" : "none";
+    TABS.forEach(t => {
+      const el = getListEl_(t);
+      if (el) el.style.display = (t === tab) ? "grid" : "none";
+    });
   }
 
-  function renderList(orders, tab) {
-    const activeTab = tab || currentTab;
-    const list = getListEl_(activeTab);
-    list.innerHTML = "";
-
-    if (!orders.length) {
-      const hint = document.getElementById("hint");
-      if (currentTab === "open") hint.textContent = "📭 Geen open orders.";
-      else hint.textContent = "✅ Geen afgehandelde orders in deze periode.";
-      return;
-    }
-    document.getElementById("hint").textContent = "";
-
-    const buildCard_ = (o) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      const stKey = normStatus_(o.OrderStatus || "Open");
-      const statusKey = (stKey === "cancelled") ? "cancelled" : ((stKey === "" || stKey === "open") ? "open" : "closed");
-      card.dataset.status = statusKey;
-      card.onclick = () => openOrder(o.OrderNumber);
-
-      const head = document.createElement("div");
-      head.className = "cardHead";
-
-      const createdDisp = formatDateDisplay_(o.CreatedAt || "");
-
-      head.innerHTML = `
-        <div class="cardRow1">
-          <div class="ordno">${escapeHtml(o.OrderNumber || "")}</div>
-          <div class="total">${formatSRD(o.OrderTotalSRD)}</div>
-        </div>
-        <div class="cardRow2">
-          <div class="name">${escapeHtml(o.CustomerName || "")}</div>
-          <div class="muted cardDt">${escapeHtml(createdDisp)}</div>
-        </div>
-      `;
-
-      const pills = document.createElement("div");
-      pills.className = "pills";
-      const pay = (o.PaymentStatus || "").toString().trim();
-      pills.appendChild(
-        pill("Pay: " + (pay ? pay : "—"), pay === "Paid" ? "ok" : (pay === "Unpaid" ? "warn" : ""))
-      );
-
-      const st = (o.OrderStatus || "Open").toString().trim() || "Open";
-      pills.appendChild(
-        pill("Status: " + st, st === "Cancelled" ? "bad" : (st === "Closed" || st === "Delivered" || st === "PickedUp" ? "ok" : ""))
-      );
-
-      card.appendChild(head);
-      card.appendChild(pills);
-      return card;
-    };
-
-    // Grouping for Open + Closed tabs with collapsible day sections.
-    // - Day order: newest day on top
-    // - Within day: earliest time on top
-    const groupedTabs = new Set(["open","closed"]);
-    if (groupedTabs.has(activeTab)) {
-      const msForTab_ = (o) => {
-        if (activeTab === "closed") return msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
-        return msFromAny_(o && (o.CreatedAt || o.StatusUpdatedAt));
-      };
-
-      const dayKey_ = (o) => {
-        try{
-          const ms = msForTab_(o);
-          if (!ms) return "Onbekende datum";
-          const d = new Date(ms);
-          // Stable key for sorting (YYYY-MM-DD in Paramaribo time)
-          return d.toLocaleDateString("en-CA", { timeZone: "America/Paramaribo" }); // e.g. 2026-02-20
-        }catch(e){ return "Onbekende datum"; }
-      };
-
-      const dayLabel_ = (yyyy_mm_dd) => {
-        try{
-          if (yyyy_mm_dd === "Onbekende datum") return yyyy_mm_dd;
-          const [y,m,da] = yyyy_mm_dd.split("-").map(Number);
-          // Use UTC noon to avoid DST edge cases when formatting in local tz
-          const dt = new Date(Date.UTC(y, (m||1)-1, da||1, 12, 0, 0));
-          return dt.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo", weekday: "long", year: "numeric", month: "long", day: "numeric" });
-        }catch(e){ return yyyy_mm_dd; }
-      };
-
-      const collapseKey_ = (k) => `pq_collapsed_${activeTab}_${k}`;
-      const isCollapsed_ = (k) => (sessionStorage.getItem(collapseKey_(k)) === "1");
-      const setCollapsed_ = (k, v) => {
-        try { sessionStorage.setItem(collapseKey_(k), v ? "1" : "0"); } catch(e){}
-      };
-
-      // Group
-      const groups = new Map(); // dayKey -> orders[]
-      (orders || []).forEach(o => {
-        const k = dayKey_(o);
-        if (!groups.has(k)) groups.set(k, []);
-        groups.get(k).push(o);
-      });
-
-      // Sort day keys: newest first. Unknown date goes last.
-      const keys = Array.from(groups.keys()).sort((a,b) => {
-        if (a === "Onbekende datum" && b === "Onbekende datum") return 0;
-        if (a === "Onbekende datum") return 1;
-        if (b === "Onbekende datum") return -1;
-        return (a < b) ? 1 : (a > b ? -1 : 0); // descending YYYY-MM-DD
-      });
-
-      keys.forEach(k => {
-        const arr = groups.get(k) || [];
-        // Sort within the day: newest time on top
-        arr.sort((a,b) => msForTab_(b) - msForTab_(a));
-
-        const header = document.createElement("div");
-        header.className = "dayGroupHeader";
-        header.setAttribute("role", "button");
-        header.setAttribute("tabindex", "0");
-        header.dataset.daykey = k;
-
-        const collapsed = isCollapsed_(k);
-        header.innerHTML = `
-          <div class="dayGroupLeft">
-            <span class="dayGroupChevron ${collapsed ? "collapsed" : ""}">▾</span>
-            <span class="dayGroupTitle">${escapeHtml(dayLabel_(k))}</span>
-          </div>
-          <div class="dayGroupMeta">${arr.length} order(s)</div>
-        `;
-        list.appendChild(header);
-
-        const body = document.createElement("div");
-        body.className = "dayGroupBody";
-        body.dataset.daykey = k;
-        body.style.display = collapsed ? "none" : "block";
-        list.appendChild(body);
-
-        arr.forEach(o => body.appendChild(buildCard_(o)));
-
-        const toggle_ = () => {
-          const nowCollapsed = body.style.display !== "none";
-          body.style.display = nowCollapsed ? "none" : "block";
-          const chev = header.querySelector(".dayGroupChevron");
-          if (chev) chev.classList.toggle("collapsed", nowCollapsed);
-          setCollapsed_(k, nowCollapsed);
-        };
-
-        header.addEventListener("click", toggle_);
-        header.addEventListener("keydown", (ev) => {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle_(); }
-        });
-      });
-
-      return;
-    }
-
-    // Flat list fallback
-    (orders || []).forEach(o => list.appendChild(buildCard_(o)));
+  function updateTabBadge_(tab, count){
+    const id = tab === "ready" ? "badgeReady" : tab === "handled" ? "badgeHandled" : "badgePick";
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(typeof count === "number" ? count : 0);
   }
 
-  function filterOrders_(orders) {
+  function updateAllBadges_(){
+    TABS.forEach(t => updateTabBadge_(t, Array.isArray(pools[t]) ? pools[t].length : 0));
+  }
+
+  function setDebug_(msg){
+    const el = document.getElementById("debugInfo");
+    if (!el) return;
+    el.textContent = DEBUG ? (msg || "") : "";
+  }
+
+  function getSearchBase_(){
+    return pools[currentTab] || [];
+  }
+
+  function filterOrders_(orders){
     const q = (searchQuery || "").trim().toLowerCase();
     if (!q) return orders || [];
     return (orders || []).filter(o => {
@@ -881,286 +461,233 @@ function msFromAny_(v){
     });
   }
 
-  function getSearchBase_() {
-    const q = (searchQuery || "").trim();
-    if (!q) return (lastOrders || []);
-    if (currentTab === "closed") return (lastOrders || []);
-    // open/ready: search in BOTH open + ready (openPool = open orders from server)
-    if (openPool && openPool.length) return openPool;
-    if (typeof cacheOpen !== "undefined" && Array.isArray(cacheOpen) && cacheOpen.length) return sortNewestFirst_(cacheOpen);
-    return (lastOrders || []);
+  function emptyHint_(tab){
+    if (tab === "pick") return "📭 Geen orders om te picken.";
+    if (tab === "ready") return "✅ Geen ready orders.";
+    return "✅ Geen handled orders.";
   }
 
-  function renderCurrent_() {
-    const tab = currentTab;
-    showTabContainers_(tab);
+  function renderList(orders, tab){
+    const activeTab = tab || currentTab;
+    const list = getListEl_(activeTab);
+    if (!list) return;
+    list.innerHTML = "";
 
-    const ver = (tab === "closed") ? closedVersion : openVersion;
-    const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + String(ver);
-    const listEl = getListEl_(tab);
-
-    // If nothing relevant changed, just swap containers without rebuilding DOM
-    if (listEl && renderSigByTab[tab] === sig && listEl.dataset && listEl.dataset.rendered === "1") {
+    if (!orders.length) {
+      document.getElementById("hint").textContent = emptyHint_(activeTab);
       return;
     }
+    document.getElementById("hint").textContent = "";
 
-    const orders = filterOrders_(getSearchBase_());
-    renderList(orders, tab);
+    const buildCard_ = (o) => {
+      const card = document.createElement("div");
+      const workflow = normWorkflow_(o.WorkflowStatus);
+      card.className = "card";
+      card.dataset.workflow = workflow;
+      card.onclick = () => openOrder(o.OrderNumber);
 
-    if (listEl && listEl.dataset) listEl.dataset.rendered = "1";
-    renderSigByTab[tab] = sig;
-  }
+      const dateForCard = activeTab === "handled" ? (o.HandledAt || o.ReadyAt || o.CreatedAt)
+        : activeTab === "ready" ? (o.ReadyAt || o.CreatedAt)
+        : o.CreatedAt;
 
+      const pay = String(o.PaymentStatus || "").trim();
+      const workflowKind = workflow === "PICK" ? "warn" : "ok";
 
-  
-function filterClosed_(orders){
-  const arr = Array.isArray(orders) ? orders : [];
-  const cutoff = Date.now() - (CLOSED_LOOKBACK_DAYS_CLIENT * 24 * 60 * 60 * 1000);
-  return arr.filter(o => {
-    const ms = msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
-    return ms >= cutoff;
-  });
-}
+      card.innerHTML = `
+        <div class="cardHead">
+          <div class="cardRow1">
+            <div class="ordno">${escapeHtml(o.OrderNumber || "")}</div>
+            <div class="total">${formatSRD(o.OrderTotalSRD)}</div>
+          </div>
+          <div class="cardRow2">
+            <div class="name">${escapeHtml(o.CustomerName || "")}</div>
+            <div class="muted cardDt">${escapeHtml(formatDateDisplay_(dateForCard || ""))}</div>
+          </div>
+        </div>
+      `;
 
-function filterByTab_(orders){
-    const arr = Array.isArray(orders) ? orders : [];
-    if (currentTab === "closed") {
-      const cutoff = Date.now() - (CLOSED_LOOKBACK_DAYS_CLIENT * 24 * 60 * 60 * 1000);
-      return arr.filter(o => {
-        const ms = msFromAny_(o && (o.StatusUpdatedAt || o.CreatedAt));
-        return ms >= cutoff;
+      const pills = document.createElement("div");
+      pills.className = "pills";
+      pills.appendChild(pill("Workflow: " + displayWorkflow_(workflow), workflowKind));
+      if (pay) pills.appendChild(pill("Pay: " + pay, pay === "Paid" ? "ok" : pay === "Unpaid" ? "warn" : ""));
+      if (workflow === "READY" && o.ReadyBy) pills.appendChild(pill("Door: " + o.ReadyBy, ""));
+      if (workflow === "HANDLED" && o.HandledSource) pills.appendChild(pill("Source: " + o.HandledSource, ""));
+      card.appendChild(pills);
+
+      return card;
+    };
+
+    const groups = new Map();
+    (orders || []).forEach(o => {
+      const ms = msForTab_(o, activeTab);
+      let k = "Onbekende datum";
+      if (ms) {
+        const d = new Date(ms);
+        k = d.toLocaleDateString("en-CA", { timeZone: "America/Paramaribo" });
+      }
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(o);
+    });
+
+    const dayLabel_ = (yyyy_mm_dd) => {
+      try{
+        if (yyyy_mm_dd === "Onbekende datum") return yyyy_mm_dd;
+        const [y,m,da] = yyyy_mm_dd.split("-").map(Number);
+        const dt = new Date(Date.UTC(y, (m||1)-1, da||1, 12, 0, 0));
+        return dt.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo", weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      }catch(e){ return yyyy_mm_dd; }
+    };
+
+    const keys = Array.from(groups.keys()).sort((a,b) => {
+      if (a === "Onbekende datum" && b === "Onbekende datum") return 0;
+      if (a === "Onbekende datum") return 1;
+      if (b === "Onbekende datum") return -1;
+      return (a < b) ? 1 : (a > b ? -1 : 0);
+    });
+
+    keys.forEach(k => {
+      const arr = groups.get(k) || [];
+      arr.sort((a,b) => msForTab_(b, activeTab) - msForTab_(a, activeTab));
+
+      const header = document.createElement("div");
+      header.className = "dayGroupHeader";
+      header.setAttribute("role", "button");
+      header.setAttribute("tabindex", "0");
+
+      const collapseKey = `pq_collapsed_${activeTab}_${k}`;
+      const collapsed = sessionStorage.getItem(collapseKey) === "1";
+      header.innerHTML = `
+        <div class="dayGroupLeft">
+          <span class="dayGroupChevron ${collapsed ? "collapsed" : ""}">▾</span>
+          <span class="dayGroupTitle">${escapeHtml(dayLabel_(k))}</span>
+        </div>
+        <div class="dayGroupMeta">${arr.length} order(s)</div>
+      `;
+      list.appendChild(header);
+
+      const body = document.createElement("div");
+      body.className = "dayGroupBody";
+      body.style.display = collapsed ? "none" : "block";
+      list.appendChild(body);
+
+      arr.forEach(o => body.appendChild(buildCard_(o)));
+
+      const toggle_ = () => {
+        const nowCollapsed = body.style.display !== "none";
+        body.style.display = nowCollapsed ? "none" : "block";
+        const chev = header.querySelector(".dayGroupChevron");
+        if (chev) chev.classList.toggle("collapsed", nowCollapsed);
+        sessionStorage.setItem(collapseKey, nowCollapsed ? "1" : "0");
+      };
+
+      header.addEventListener("click", toggle_);
+      header.addEventListener("keydown", ev => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle_(); }
       });
-    }return arr.filter(isOpen_); // open tab
-  }
-
-  function formatSRD(v) {
-    const n = Number(v || 0);
-    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
-  }
-
-  function formatDateDisplay_(s) {
-    if (!s) return "";
-    const raw = String(s).trim();
-    if (!raw) return "";
-    try {
-      if (/^\\d{4}-\\d{2}-\\d{2}T/.test(raw)) {
-        const d = new Date(raw);
-        const date = d.toLocaleDateString("nl-NL", { timeZone: "America/Paramaribo" });
-        const time = d.toLocaleTimeString("nl-NL", { timeZone: "America/Paramaribo", hour: "2-digit", minute: "2-digit" });
-        return `${date} · ${time}`;
-      }
-      const m = raw.match(/^(\\d{2}-\\d{2}-\\d{4})[\\s,]+(\\d{2}:\\d{2})/);
-      if (m) return `${m[1]} · ${m[2]}`;
-      return raw;
-    } catch (e) {
-      return raw;
-    }
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-    }[m]));
-  }
-
-  function setDebug_(msg) {
-    if (!DEBUG) { const el = document.getElementById("debugInfo"); if (el) el.textContent = ""; return; }
-    const el = document.getElementById("debugInfo");
-    if (el) el.textContent = msg || "";
-  }
-
-  // --- Tabs & load ---
-  async function loadBuildInfo() {
-    try {
-      const res = await api("ping");
-      if (res && res.ok) {
-        document.getElementById("buildInfo").textContent = `${res.build} • ${res.time}`;
-      } else {
-        document.getElementById("buildInfo").textContent = "ping failed";
-      }
-    } catch (e) {
-      document.getElementById("buildInfo").textContent = "not connected";
-    }
-  }
-
-  function sortNewestFirst_(orders) {
-    return (orders || []).slice().sort((a, b) => {
-      const ta = Date.parse((a.StatusUpdatedAt || a.CreatedAt) || 0);
-      const tb = Date.parse((b.StatusUpdatedAt || b.CreatedAt) || 0);
-      return tb - ta;
     });
   }
 
-  function updateAllBadgesFromOpenList_(openList){
-    const arr = Array.isArray(openList) ? openList : [];
-    const openCount = arr.filter(isOpen_).length;
-    tabCountCache.open = openCount;
-    updateTabBadge_("open", openCount);
+  function renderCurrent_(){
+    const tab = currentTab;
+    showTabContainers_(tab);
+    const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + String(versions[tab]);
+    const listEl = getListEl_(tab);
+    if (listEl && renderSigByTab[tab] === sig && listEl.dataset.rendered === "1") return;
+
+    const orders = filterOrders_(getSearchBase_());
+    renderList(orders, tab);
+    if (listEl) listEl.dataset.rendered = "1";
+    renderSigByTab[tab] = sig;
+
+    setDebug_(`tab=${tab} • total=${orders.length} • q="${searchQuery}"`);
   }
 
-    function applyTabView_(opts = {}) {
-    const prefetch = opts.prefetch !== false;
+  async function ensureTabData_(tab, force = false){
+    if (!force && !dirty[tab] && cachesLoaded[tab]) return;
+    if (loading[tab]) return loading[tab];
 
-    if (currentTab === "closed") {
-      lastOrders = filterClosed_(closedPool);
-    } else {
-      lastOrders = filterByTab_(openPool);
-    }
-
-    tabCountCache[currentTab] = lastOrders.length;
-    updateTabBadge_(currentTab, lastOrders.length);
-
-    setDebug_(`tab=${currentTab} • total=${lastOrders.length} • q="${searchQuery}"`);
-    renderCurrent_();
-
-    if (prefetch) prefetchTopDetails_(lastOrders);
-  }
-
-  async function ensureOpenData_(force = false) {
-    if (!force && !openDirty && Array.isArray(cacheOpen)) return;
-    if (openLoading) return openLoading;
-
-    openLoading = (async () => {
-      const res = await api("getOpenOrders");
-      if (!res || !res.ok) throw new Error((res && res.error) || "API error (getOpenOrders)");
-
-      cacheOpen = res.orders || [];
-      openPool = sortNewestFirst_(cacheOpen);
-// Update Open badge from cached dataset
-      const openCount = openPool.filter(isOpen_).length;
-      tabCountCache.open = openCount;
-      updateTabBadge_("open", openCount);
-
-      openDirty = false;
-    openVersion += 1;
-    renderSigByTab.open = null;
-    renderSigByTab.ready = null;
+    loading[tab] = (async () => {
+      const res = await api(ACTION_BY_TAB[tab]);
+      if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + ACTION_BY_TAB[tab] + ")");
+      pools[tab] = sortNewestFirst_(res.orders || [], tab);
+      cachesLoaded[tab] = true;
+      dirty[tab] = false;
+      versions[tab]++;
+      renderSigByTab[tab] = null;
+      updateTabBadge_(tab, pools[tab].length);
     })();
 
-    try { await openLoading; }
-    finally { openLoading = null; }
+    try { await loading[tab]; }
+    finally { loading[tab] = null; }
   }
 
-  async function ensureClosedData_(force = false) {
-    if (!force && !closedDirty && Array.isArray(cacheClosed)) return;
-    if (closedLoading) return closedLoading;
-
-    closedLoading = (async () => {
-      const res = await api("getClosedOrders");
-      if (!res || !res.ok) throw new Error((res && res.error) || "API error (getClosedOrders)");
-
-      cacheClosed = res.orders || [];
-      closedPool = sortNewestFirst_(cacheClosed);
-tabCountCache.closed = closedPool.length;
-      updateTabBadge_("closed", closedPool.length);
-
-      closedDirty = false;
-    closedVersion += 1;
-    renderSigByTab.closed = null;
-    })();
-
-    try { await closedLoading; }
-    finally { closedLoading = null; }
-  }
-
-  async function loadCurrentTab_(opts = {}) {
+  async function loadCurrentTab_(opts = {}){
     const force = !!opts.force;
     const showSpinner = !!opts.showSpinner;
     const btn = document.getElementById("btnRefresh");
+
     if (showSpinner && btn) { btn.classList.add("loading"); btn.disabled = true; }
 
-    try {
-      if (currentTab === "closed") await ensureClosedData_(force);
-      else await ensureOpenData_(force);
-
-      applyTabView_({ prefetch: true });
-    } finally {
+    try{
+      await ensureTabData_(currentTab, force);
+      renderCurrent_();
+      prefetchTopDetails_(filterOrders_(pools[currentTab] || []));
+    }finally{
       if (showSpinner && btn) { btn.classList.remove("loading"); btn.disabled = false; }
     }
   }
 
-async function loadOrders() {
-    // Backward compatibility for existing callers
-    await loadCurrentTab_({ force: false, showSpinner: false });
+  async function safeLoadOrders(force = true){
+    try{
+      await loadCurrentTab_({ force: !!force, showSpinner: true });
+      backgroundRefreshCounts_();
+    }catch(e){
+      document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
+      TABS.forEach(t => { const el = getListEl_(t); if (el) el.innerHTML = ""; });
+    }
   }
 
-function setTab(tab) {
-    const next = (tab === "closed") ? "closed" : "open";
+  function setTab(tab){
+    const next = TABS.includes(tab) ? tab : "pick";
     currentTab = next;
 
-    const openBtn = document.getElementById("tabOpen");
-    const closedBtn = document.getElementById("tabClosed");
-    if (openBtn) openBtn.classList.toggle("active", currentTab === "open");
-    if (closedBtn) closedBtn.classList.toggle("active", currentTab === "closed");
+    document.getElementById("tabPick").classList.toggle("active", currentTab === "pick");
+    document.getElementById("tabReady").classList.toggle("active", currentTab === "ready");
+    document.getElementById("tabHandled").classList.toggle("active", currentTab === "handled");
 
-    // Instant feedback using cache when available (no refetch, avoid rebuild)
     showTabContainers_(currentTab);
-    const listEl = getListEl_(currentTab);
-    if (listEl && listEl.children && listEl.children.length) return;
+    if (cachesLoaded[currentTab]) renderCurrent_();
+  }
 
-    // If container is empty, render from cache if available
-    if (currentTab === "closed" && cacheClosed) {
-      lastOrders = filterClosed_(cacheClosed);
-      renderCurrent_();
-    } else if (currentTab === "open" && cacheOpen) {
-      lastOrders = filterByTab_(cacheOpen);
-      renderCurrent_();
+  async function onTabSwitch_(tab){
+    setTab(tab);
+    try{
+      await loadCurrentTab_({ force: false, showSpinner: false });
+    }catch(e){
+      document.getElementById("hint").textContent = "Error: " + (e.message || String(e));
     }
   }
 
-
-  function updateTabBadge_(tab, count) {
-    try {
-      const t = (tab === "closed") ? "closed" : "open";
-      const n = (typeof count === "number") ? count : 0;
-      const id = (t === "open") ? "badgeOpen" : "badgeClosed";
-      const el = document.getElementById(id);
-      if (el) el.textContent = String(n);
-    } catch (e) {}
-  }
-
-
-  // --- Order detail ---
-  async function openOrder(orderNumber) {
-    try {
-      const modal = document.getElementById("orderModal");
-      modal.classList.add("show");
-      document.getElementById("odTitle").textContent = "Order " + orderNumber;
-      document.getElementById("odKV").innerHTML = `<div class="muted">Loading</div><div>…</div>`;
-      document.getElementById("odItems").innerHTML = "";
-      document.getElementById("odItemsCount").textContent = "";
-
-      const cached = getCachedOrderDetail_(orderNumber);
-      if (cached) {
-        const oCached = cached;
-        currentOrder = oCached;
-        initPickState_(currentOrder);
-        prefetchOrderDetail_(orderNumber).then(fresh => {
-          if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
-            initPickState_(fresh);
-            applyOrderToModal_(fresh);
-          }
-        }).catch(()=>{});
-
+  async function backgroundRefreshCounts_(){
+    TABS.forEach(t => {
+      if (t === currentTab && cachesLoaded[t]) {
+        updateTabBadge_(t, pools[t].length);
         return;
       }
+      ensureTabData_(t, false).then(() => updateTabBadge_(t, pools[t].length)).catch(()=>{});
+    });
+  }
 
-      const res = await api("getOrder", { orderNumber });
-      if (!res || !res.ok) throw new Error((res && res.error) || "API error");
-
-      const o = res.order || {};
-      currentOrder = o;
-      initPickState_(currentOrder);
-      setCachedOrderDetail_(o);
-      applyOrderToModal_(o);
-      updateOrderActionsUI_();
-
-    } catch (e) {
-      document.getElementById("odKV").innerHTML = `<div class="muted">Error</div><div>${escapeHtml(e.message || String(e))}</div>`;
+  async function loadBuildInfo(){
+    try{
+      const res = await api("ping");
+      document.getElementById("buildInfo").textContent = res && res.ok ? `${res.build} • ${res.time}` : "ping failed";
+    }catch(e){
+      document.getElementById("buildInfo").textContent = "not connected";
     }
   }
 
-  function addKV(container, k, v) {
+  function addKV(container, k, v){
     const a = document.createElement("div");
     a.className = "muted";
     a.textContent = k;
@@ -1170,7 +697,7 @@ function setTab(tab) {
     container.appendChild(b);
   }
 
-  function formatOptions(options) {
+  function formatOptions(options){
     if (!options) return "";
     if (Array.isArray(options)) {
       return options.map(o => (o.name && o.value) ? `${o.name}: ${o.value}` : "").filter(Boolean).join(" · ");
@@ -1181,133 +708,11 @@ function setTab(tab) {
     return String(options);
   }
 
-  function firstImageUrl(it) {
+  function firstImageUrl(it){
     return it.thumbUrl || it.imageUrl || (Array.isArray(it.altImageUrls) ? it.altImageUrls[0] : "") || "";
   }
 
-  // --- Modal controls ---
-  const settingsModal = document.getElementById("settingsModal");
-  document.getElementById("btnSettings").onclick = () => {
-    document.getElementById("apiBase").value = getApiBase();
-    document.getElementById("pingResult").textContent = "";
-    settingsModal.classList.add("show");
-  };
-  document.getElementById("closeSettings").onclick = () => settingsModal.classList.remove("show");
-  settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
-
-  document.getElementById("btnSaveApi").onclick = async () => {
-    setApiBase(document.getElementById("apiBase").value);
-    await loadBuildInfo();
-    await safeLoadOrders();
-    refreshTabCount_("open"); // will refresh open+ready
-    refreshTabCount_("closed");
-settingsModal.classList.remove("show");
-  };
-
-  document.getElementById("btnTestPing").onclick = async () => {
-    setApiBase(document.getElementById("apiBase").value);
-    const el = document.getElementById("pingResult");
-    el.textContent = "Testing…";
-    try {
-      const res = await api("ping");
-      el.textContent = res && res.ok ? `OK: ${res.build} @ ${res.time}` : `Fail: ${(res && res.error) || "unknown"}`;
-    } catch (e) {
-      el.textContent = "Error: " + (e.message || String(e));
-    }
-  };
-
-  const orderModal = document.getElementById("orderModal");
-  document.getElementById("closeOrder").onclick = () => orderModal.classList.remove("show");
-  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.classList.remove("show"); });
-
-  // --- v1 Afhandeling actions ---
-  (function wireOrderStatusButtons_(){
-    const btnDone = document.getElementById("btnMarkDone");
-    const btnCancel = document.getElementById("btnCancel");
-    const btnConfirmCancel = document.getElementById("btnConfirmCancel");
-    const btnCancelBack = document.getElementById("btnCancelBack");
-    const cancelBox = document.getElementById("cancelBox");
-    const cancelNote = document.getElementById("cancelNote");
-    const resultEl = document.getElementById("odActionResult");
-
-    if (btnDone) {
-      btnDone.onclick = async () => {
-        try {
-          if (resultEl) resultEl.textContent = "";
-          if (!currentOrder || !currentOrder.PickComplete) {
-            if (resultEl) resultEl.textContent = "⚠️ Pick is nog niet compleet.";
-            return;
-          }
-          await setOrderStatus_("Closed", "");
-        } catch (e) {
-          if (resultEl) resultEl.textContent = "❌ " + (e && e.message ? e.message : String(e));
-        }
-      };
-    }
-
-    if (btnCancel) {
-      btnCancel.onclick = () => {
-        if (resultEl) resultEl.textContent = "";
-        if (cancelBox) cancelBox.style.display = "block";
-        if (cancelNote) cancelNote.focus();
-      };
-    }
-
-    if (btnCancelBack) {
-      btnCancelBack.onclick = () => {
-        if (resultEl) resultEl.textContent = "";
-        resetCancelUI_();
-      };
-    }
-
-    if (btnConfirmCancel) {
-      btnConfirmCancel.onclick = async () => {
-        try {
-          if (resultEl) resultEl.textContent = "";
-          const note = (cancelNote ? String(cancelNote.value || "").trim() : "");
-          if (!note) {
-            if (resultEl) resultEl.textContent = "⚠️ Note is verplicht bij cancel.";
-            if (cancelNote) cancelNote.focus();
-            return;
-          }
-          await setOrderStatus_("Cancelled", note);
-        } catch (e) {
-          if (resultEl) resultEl.textContent = "❌ " + (e && e.message ? e.message : String(e));
-        }
-      };
-    }
-  })();
-
-  // tabs
-  async function onTabSwitch_(tab) {
-    setTab(tab);
-    // No refetch on tab switch; reuse cache unless marked dirty
-    try {
-      await loadCurrentTab_({ force: false, showSpinner: false });
-    } catch (e) {
-      document.getElementById("hint").textContent = "Error: " + (e.message || String(e));
-    }
-  }
-
-  document.getElementById("tabOpen").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("open"); });
-  document.getElementById("tabClosed").addEventListener("click", (ev) => { ev.preventDefault(); onTabSwitch_("closed"); });
-
-  document.getElementById("btnRefresh").onclick = async () => { await safeLoadOrders(); refreshTabCount_("open"); refreshTabCount_("closed"); };
-
-  async function safeLoadOrders(force = true) {
-    try {
-      await loadCurrentTab_({ force: !!force, showSpinner: true });
-    } catch (e) {
-      document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
-      (document.getElementById("listOpen")||{}).innerHTML = "";
-      (document.getElementById("listClosed")||{}).innerHTML = "";
-    }
-  }
-  // --- Pick checks state ---
-  let pickChecks = []; // boolean[] aligned to currentOrder.Items
-  let pickSaveTimer = null;
-
-  function normalizePickChecks_(items, checks) {
+  function normalizePickChecks_(items, checks){
     const n = Array.isArray(items) ? items.length : 0;
     const out = new Array(n);
     const src = Array.isArray(checks) ? checks : [];
@@ -1315,40 +720,22 @@ settingsModal.classList.remove("show");
     return out;
   }
 
-function computePickComplete_(checks) {
-  const arr = Array.isArray(checks) ? checks : [];
-  if (!arr.length) return false;
-  for (let i = 0; i < arr.length; i++) {
-    if (!arr[i]) return false;
+  function computePickComplete_(checks){
+    const arr = Array.isArray(checks) ? checks : [];
+    return arr.length > 0 && arr.every(Boolean);
   }
-  return true;
-}
 
-
-// Defensive: derive pick completion from current state (PickChecks or DOM)
-// This prevents the "Afgehandeld" button from staying disabled if PickComplete isn't refreshed correctly.
-function pickCompleteNow_(){
-  try{
-    if(currentOrder && Array.isArray(currentOrder.PickChecks)){
-      return computePickComplete_(currentOrder.PickChecks);
+  function pickCompleteNow_(){
+    try{
+      if (currentOrder && Array.isArray(currentOrder.PickChecks)) return computePickComplete_(currentOrder.PickChecks);
+      const boxes = Array.from(document.querySelectorAll("#odItems .pickCb"));
+      return boxes.length > 0 && boxes.every(b => !!b.checked);
+    }catch(e){
+      return !!(currentOrder && currentOrder.PickComplete);
     }
-    const boxes = Array.from(document.querySelectorAll('#odItems .pickCb'));
-    if(!boxes.length) return false;
-    return boxes.every(b => !!b.checked);
-  }catch(e){
-    return !!(currentOrder && currentOrder.PickComplete);
-  }
-}
-
-
-  function initPickState_(orderObj) {
-    const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
-    pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
-    if (orderObj) orderObj.PickChecks = pickChecks;
-    updatePickUI_();
   }
 
-  function updatePickUI_() {
+  function updatePickUI_(){
     const el = document.getElementById("odPickStatus");
     if (!el) return;
     if (!currentOrder) { el.textContent = ""; return; }
@@ -1358,217 +745,272 @@ function pickCompleteNow_(){
     updateOrderActionsUI_();
   }
 
-  function updateOrderActionsUI_() {
+  function updateOrderActionsUI_(){
     const hint = document.getElementById("odStatusHint");
-    const btnDone = document.getElementById("btnMarkDone");
-    const btnCancel = document.getElementById("btnCancel");
-    if (!hint || !btnDone || !btnCancel) return;
+    const btn = document.getElementById("btnMarkReady");
+    const sec = document.getElementById("odActionsSec");
+    if (!hint || !btn || !sec) return;
 
     if (!currentOrder) {
       hint.textContent = "—";
-      btnDone.disabled = true;
+      btn.disabled = true;
       return;
     }
 
-    const st = String(currentOrder.OrderStatus || "").trim() || "Open";
-    const stNorm = st.toLowerCase();
-    const alreadyClosed = (stNorm === "closed" || stNorm === "cancelled" || stNorm === "delivered" || stNorm === "pickedup");
+    const workflow = normWorkflow_(currentOrder.WorkflowStatus);
     const pickComplete = pickCompleteNow_();
     currentOrder.PickComplete = pickComplete;
 
-    hint.textContent = `Status: ${st}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
-    btnDone.disabled = alreadyClosed || !pickComplete;
+    hint.textContent = `Workflow: ${displayWorkflow_(workflow)}` + (pickComplete ? " • PickComplete ✅" : " • PickComplete ❌");
+
+    if (workflow === "PICK") {
+      sec.style.display = "block";
+      btn.textContent = "Markeer als Ready";
+      btn.disabled = !pickComplete;
+    } else {
+      sec.style.display = "block";
+      btn.textContent = workflow === "READY" ? "Al Ready" : "Handled";
+      btn.disabled = true;
+    }
   }
 
-  function resetCancelUI_() {
-    const box = document.getElementById("cancelBox");
-    if (box) box.style.display = "none";
-    const note = document.getElementById("cancelNote");
-    if (note) note.value = "";
-  }
-
-  
-  // Optimistic UI updates for status changes (move cards between tabs without refetch)
-  function optimisticStatusUpdate_(orderNumber, patch, apiPromise, successMsg){
-    const ord = String(orderNumber || "").trim();
-    if(!ord) return;
-
-    // Snapshot for rollback
-    const prevOpen = Array.isArray(openPool) ? openPool.slice() : [];
-    const prevClosed = Array.isArray(closedPool) ? closedPool.slice() : [];
-
-    const nowIso = new Date().toISOString();
-
-    const applyPatch_ = (obj) => Object.assign({}, obj || {}, patch || {}, { StatusUpdatedAt: nowIso });
-
+  async function openOrder(orderNumber){
     try{
-      const idxOpen = openPool.findIndex(o => String(o && o.OrderNumber) === ord);
-      const idxClosed = closedPool.findIndex(o => String(o && o.OrderNumber) === ord);
+      const modal = document.getElementById("orderModal");
+      modal.classList.add("show");
+      document.getElementById("odTitle").textContent = "Order " + orderNumber;
+      document.getElementById("odKV").innerHTML = `<div class="muted">Loading</div><div>…</div>`;
+      document.getElementById("odItems").innerHTML = "";
+      document.getElementById("odItemsCount").textContent = "";
+      document.getElementById("odActionResult").textContent = "";
 
-      if(idxOpen >= 0){
-        const next = applyPatch_(openPool[idxOpen]);
-        if(isClosedLike_(next)){
-          openPool.splice(idxOpen, 1);
-          if(idxClosed >= 0) closedPool.splice(idxClosed, 1);
-          closedPool.unshift(next);
-          closedPool = sortNewestFirst_(closedPool);
-        }else{
-          openPool[idxOpen] = next;
-          openPool = sortNewestFirst_(openPool);
-        }
-      }else if(idxClosed >= 0){
-        const next = applyPatch_(closedPool[idxClosed]);
-        if(isClosedLike_(next)){
-          closedPool[idxClosed] = next;
-          closedPool = sortNewestFirst_(closedPool);
-        }else{
-          closedPool.splice(idxClosed, 1);
-          openPool.unshift(next);
-          openPool = sortNewestFirst_(openPool);
-        }
+      const cached = getCachedOrderDetail_(orderNumber);
+      if (cached) {
+        currentOrder = cached;
+        initPickState_(currentOrder);
+        applyOrderToModal_(currentOrder);
+        prefetchOrderDetail_(orderNumber, true).then(fresh => {
+          if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
+            currentOrder = fresh;
+            initPickState_(fresh);
+            applyOrderToModal_(fresh);
+          }
+        }).catch(()=>{});
+        return;
       }
 
-      // Keep modal state consistent
-      if(currentOrder && String(currentOrder.OrderNumber) === ord){
-        currentOrder = applyPatch_(currentOrder);
-        const stEl = document.getElementById("odPickStatus");
-        if(stEl) stEl.textContent = (currentOrder.OrderStatus || "");
-      }
-
-      // Badges + re-render
-      updateAllBadgesFromOpenList_(openPool);
-      const closedCount = filterClosed_(closedPool).length;
-      tabCountCache.closed = closedCount;
-      updateTabBadge_("closed", closedCount);
-
-      renderSigByTab.open = null;
-      renderSigByTab.ready = null;
-      renderSigByTab.closed = null;
-
-      applyTabView_({ prefetch: false });
-
+      const fresh = await prefetchOrderDetail_(orderNumber, true);
+      if (!fresh) throw new Error("Order not found");
+      currentOrder = fresh;
+      initPickState_(currentOrder);
+      applyOrderToModal_(currentOrder);
     }catch(e){
-      // If something goes wrong, revert immediately
-      openPool = prevOpen;
-      closedPool = prevClosed;
-      updateAllBadgesFromOpenList_(openPool);
-      const closedCount = filterClosed_(closedPool).length;
-      tabCountCache.closed = closedCount;
-      updateTabBadge_("closed", closedCount);
-      renderSigByTab.open = null;
-      renderSigByTab.ready = null;
-      renderSigByTab.closed = null;
-      applyTabView_({ prefetch: false });
+      document.getElementById("odKV").innerHTML = `<div class="muted">Error</div><div>${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function initPickState_(orderObj){
+    const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
+    pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
+    if (orderObj) orderObj.PickChecks = pickChecks;
+    updatePickUI_();
+  }
+
+  function applyOrderToModal_(o){
+    const kv = document.getElementById("odKV");
+    kv.innerHTML = "";
+
+    addKV(kv, "Order", o.OrderNumber);
+    addKV(kv, "Naam", o.CustomerName);
+    addKV(kv, "Tel", o.CustomerPhone);
+    addKV(kv, "Email", o.CustomerEmail);
+    addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
+    addKV(kv, "Workflow", displayWorkflow_(o.WorkflowStatus));
+    addKV(kv, "ReadyAt", formatDateDisplay_(o.ReadyAt || ""));
+    addKV(kv, "HandledAt", formatDateDisplay_(o.HandledAt || ""));
+    addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+
+    const items = Array.isArray(o.Items) ? o.Items : [];
+    pickChecks = normalizePickChecks_(items, o.PickChecks);
+    if (currentOrder && String(currentOrder.OrderNumber || "") === String(o.OrderNumber || "")) {
+      currentOrder.PickChecks = pickChecks;
+      currentOrder.PickComplete = computePickComplete_(pickChecks);
     }
 
-    Promise.resolve(apiPromise).then(() => {
-      const resEl = document.getElementById("odActionResult");
-      if(resEl && successMsg) resEl.textContent = String(successMsg);
-    }).catch(async (err) => {
-      // Rollback and reconcile
-      openPool = prevOpen;
-      closedPool = prevClosed;
+    document.getElementById("odItemsCount").textContent = `${items.length} item(s)`;
 
-      updateAllBadgesFromOpenList_(openPool);
-      const closedCount = filterClosed_(closedPool).length;
-      tabCountCache.closed = closedCount;
-      updateTabBadge_("closed", closedCount);
+    const itemsWrap = document.getElementById("odItems");
+    itemsWrap.innerHTML = "";
 
-      renderSigByTab.open = null;
-      renderSigByTab.ready = null;
-      renderSigByTab.closed = null;
-      applyTabView_({ prefetch: false });
+    items.forEach((it, idx) => {
+      const row = document.createElement("div");
+      row.className = "item";
 
-      const resEl = document.getElementById("odActionResult");
-      if(resEl) resEl.textContent = "❌ " + (err && err.message ? err.message : String(err));
+      const pickWrap = document.createElement("div");
+      pickWrap.className = "pickCol";
 
-      // Mark dirty so a manual refresh can fix any server-side derived fields
-      openDirty = true;
-      closedDirty = true;
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "pickCb";
+      cb.checked = !!pickChecks[idx];
+      cb.disabled = normWorkflow_(o.WorkflowStatus) !== "PICK";
+      cb.onchange = () => {
+        pickChecks[idx] = !!cb.checked;
+        currentOrder.PickChecks = pickChecks;
+        const pc = computePickComplete_(pickChecks);
+        currentOrder.PickComplete = pc;
+        updatePickUI_();
+        updateOrderInCaches_(String(currentOrder.OrderNumber || "").trim(), { PickChecks: pickChecks, PickComplete: pc });
+        renderCurrent_();
+        scheduleSavePickChecks_();
+      };
+
+      pickWrap.appendChild(cb);
+
+      const img = document.createElement("img");
+      img.className = "thumb";
+      const src = firstImageUrl(it);
+      if (src) img.src = src;
+
+      const body = document.createElement("div");
+      body.style.flex = "1";
+      const qty = Number(it.qty || 1);
+      const opts = formatOptions(it.options);
+
+      body.innerHTML = `
+        <div class="itName"><span class="itQty">${escapeHtml(qty)}x</span>${escapeHtml(it.name || "")}</div>
+        ${opts ? `<div class="itOpt">${escapeHtml(opts)}</div>` : ""}
+      `;
+
+      row.appendChild(pickWrap);
+      row.appendChild(img);
+      row.appendChild(body);
+      itemsWrap.appendChild(row);
     });
+
+    updatePickUI_();
+    updateOrderActionsUI_();
+    warmImagesForOrder_(o);
   }
 
-async function setOrderStatus_(status, note) {
-  if (!currentOrder) throw new Error("No order selected");
-  const orderNumber = String(currentOrder.OrderNumber || "").trim();
-  if (!orderNumber) throw new Error("Missing OrderNumber");
+  function scheduleSavePickChecks_(){
+    if (!currentOrder) return;
+    currentOrder.PickChecks = pickChecks;
+    clearTimeout(pickSaveTimer);
 
-  const newStatus = String(status || "").trim();
-  const params = { orderNumber, status: newStatus };
-  if (note) params.note = String(note);
+    pickSaveTimer = setTimeout(() => {
+      const orderNumber = String(currentOrder.OrderNumber || "").trim();
+      const payload = { orderNumber, checks: JSON.stringify(pickChecks) };
+      const resEl = document.getElementById("odActionResult");
+      if (resEl) resEl.textContent = "Pick checks opslaan…";
 
-  // Close modal quickly and update UI immediately (optimistic)
-  const modal = document.getElementById("orderModal");
-  if (modal) modal.classList.remove("show");
-  resetCancelUI_();
-
-  const resEl = document.getElementById("odActionResult");
-  if (resEl) resEl.textContent = `⏳ Status opslaan: ${newStatus}`;
-
-  // Optimistic move between tabs/lists
-  optimisticStatusUpdate_(
-    orderNumber,
-    { OrderStatus: newStatus },
-    api("setOrderStatus", params).then((res) => {
-      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set status");
-      return res;
-    }),
-    `✅ Status bijgewerkt: ${newStatus}`
-  );
-
-  // Mark caches dirty so a later manual refresh can reconcile server-side derived fields (optional)
-  openDirty = true;
-  closedDirty = true;
-}
-
-
-  function scheduleSavePickChecks_() {
-  if (!currentOrder) return;
-
-  // Optimistic: we already updated `pickChecks` in-memory on click.
-  // Reflect immediately in the current order object (for UI + caching).
-  currentOrder.PickChecks = pickChecks;
-
-  clearTimeout(pickSaveTimer);
-  pickSaveTimer = setTimeout(() => {
-    const orderNumber = String(currentOrder.OrderNumber || "").trim();
-    const payload = {
-      orderNumber,
-      checks: JSON.stringify(pickChecks)
-    };
-
-    const waRes = document.getElementById("waResult");
-    if (waRes) waRes.textContent = "Opslaan…";
-
-    background_(
-      api("setPickChecks", payload).then((res) => {
+      api("setPickChecks", payload).then(res => {
         if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
-        return res;
-      }),
-      (res) => {
-        // Server is source of truth for PickComplete calculation
-        currentOrder.PickComplete = computePickComplete_(pickChecks); currentOrder.PickChecks = pickChecks;
+        currentOrder.PickComplete = computePickComplete_(pickChecks);
+        currentOrder.PickChecks = pickChecks;
+        setCachedOrderDetail_(currentOrder);
+        updateOrderInCaches_(orderNumber, { PickComplete: currentOrder.PickComplete, PickChecks: pickChecks });
         updatePickUI_();
-        if (waRes) waRes.textContent = "Opgeslagen ✅";
-        // keep list caches in sync (no refetch)
-        updateOrderInCaches_(orderNumber, { PickComplete: computePickComplete_(pickChecks), PickChecks: pickChecks });
-        applyTabView_({ prefetch: false });
-      },
-      (e) => {
-        if (waRes) waRes.textContent = "Pick save error: " + (e.message || String(e));
+        if (resEl) resEl.textContent = "Opgeslagen ✅";
+      }).catch(e => {
+        if (resEl) resEl.textContent = "Pick save error: " + (e.message || String(e));
+      });
+    }, 250);
+  }
+
+  function moveOrderBetweenPools_(orderNumber, targetTab, patch){
+    const ord = String(orderNumber || "").trim();
+    let found = null;
+
+    TABS.forEach(t => {
+      const idx = pools[t].findIndex(o => String(o && o.OrderNumber) === ord);
+      if (idx >= 0) {
+        found = Object.assign({}, pools[t][idx], patch || {});
+        pools[t].splice(idx, 1);
+        versions[t]++;
+        renderSigByTab[t] = null;
       }
-    );
-  }, 250);
-}
+    });
 
+    if (!found) found = Object.assign({ OrderNumber: ord }, patch || {});
+    pools[targetTab].unshift(found);
+    pools[targetTab] = sortNewestFirst_(pools[targetTab], targetTab);
+    versions[targetTab]++;
+    renderSigByTab[targetTab] = null;
+    updateAllBadges_();
+  }
 
-  // --- Order detail prefetch/cache ---
-  const DETAIL_PREFETCH_LIMIT = 8;
-  const detailCache = new Map(); // orderNumber -> orderDetailObject
-  const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v1";
+  async function markCurrentOrderReady_(){
+    if (!currentOrder) throw new Error("No order selected");
+    if (!pickCompleteNow_()) throw new Error("Pick is nog niet compleet.");
 
-  function loadDetailCacheFromSession_() {
-    try {
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    if (!orderNumber) throw new Error("Missing OrderNumber");
+
+    const modal = document.getElementById("orderModal");
+    const resEl = document.getElementById("odActionResult");
+    if (resEl) resEl.textContent = "Ready opslaan…";
+
+    const previous = JSON.parse(JSON.stringify(pools));
+    const now = new Date().toISOString();
+
+    currentOrder.WorkflowStatus = "READY";
+    currentOrder.ReadyAt = now;
+
+    moveOrderBetweenPools_(orderNumber, "ready", {
+      WorkflowStatus: "READY",
+      ReadyAt: now,
+      PickComplete: true
+    });
+    renderCurrent_();
+
+    try{
+      const res = await api("setWorkflowStatus", {
+        orderNumber,
+        workflowStatus: "READY",
+        source: "PickQueue"
+      });
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set workflow status");
+
+      dirty.pick = true;
+      dirty.ready = true;
+      setCachedOrderDetail_(currentOrder);
+      if (modal) modal.classList.remove("show");
+      await loadCurrentTab_({ force: true, showSpinner: false });
+      backgroundRefreshCounts_();
+    }catch(e){
+      TABS.forEach(t => {
+        pools[t] = previous[t] || [];
+        versions[t]++;
+        renderSigByTab[t] = null;
+      });
+      updateAllBadges_();
+      renderCurrent_();
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+      throw e;
+    }
+  }
+
+  function updateOrderInCaches_(orderNumber, patch){
+    const ord = String(orderNumber || "").trim();
+    TABS.forEach(t => {
+      const idx = pools[t].findIndex(o => String(o && o.OrderNumber) === ord);
+      if (idx >= 0) {
+        pools[t][idx] = Object.assign({}, pools[t][idx], patch || {});
+        versions[t]++;
+        renderSigByTab[t] = null;
+      }
+    });
+
+    const cached = detailCache.get(ord);
+    if (cached) {
+      detailCache.set(ord, Object.assign({}, cached, patch || {}));
+      saveDetailCacheToSession_();
+    }
+  }
+
+  function loadDetailCacheFromSession_(){
+    try{
       const raw = sessionStorage.getItem(DETAIL_CACHE_SS_KEY);
       if (!raw) return;
       const obj = JSON.parse(raw);
@@ -1576,25 +1018,25 @@ async function setOrderStatus_(status, note) {
       Object.keys(obj).forEach(k => {
         if (obj[k] && typeof obj[k] === "object") detailCache.set(k, obj[k]);
       });
-    } catch (e) {}
+    }catch(e){}
   }
 
-  function saveDetailCacheToSession_() {
-    try {
+  function saveDetailCacheToSession_(){
+    try{
       const entries = Array.from(detailCache.entries()).slice(0, 30);
       const obj = {};
       entries.forEach(([k,v]) => obj[k] = v);
       sessionStorage.setItem(DETAIL_CACHE_SS_KEY, JSON.stringify(obj));
-    } catch (e) {}
+    }catch(e){}
   }
 
-  function getCachedOrderDetail_(orderNumber) {
+  function getCachedOrderDetail_(orderNumber){
     const key = String(orderNumber || "").trim();
     if (!key) return null;
     return detailCache.get(key) || null;
   }
 
-  function setCachedOrderDetail_(orderObj) {
+  function setCachedOrderDetail_(orderObj){
     if (!orderObj) return;
     const key = String(orderObj.OrderNumber || "").trim();
     if (!key) return;
@@ -1602,10 +1044,11 @@ async function setOrderStatus_(status, note) {
     saveDetailCacheToSession_();
   }
 
-  async function prefetchOrderDetail_(orderNumber) {
+  async function prefetchOrderDetail_(orderNumber, force = false){
     const key = String(orderNumber || "").trim();
     if (!key) return null;
-    if (detailCache.has(key)) return detailCache.get(key);
+    if (!force && detailCache.has(key)) return detailCache.get(key);
+
     const res = await api("getOrder", { orderNumber: key });
     if (res && res.ok && res.order) {
       setCachedOrderDetail_(res.order);
@@ -1615,22 +1058,21 @@ async function setOrderStatus_(status, note) {
     return null;
   }
 
-  function prefetchTopDetails_(orders) {
-    try {
+  function prefetchTopDetails_(orders){
+    try{
       if (!Array.isArray(orders) || !orders.length) return;
-      const top = orders.slice(0, DETAIL_PREFETCH_LIMIT)
+      orders.slice(0, DETAIL_PREFETCH_LIMIT)
         .map(o => String(o.OrderNumber || "").trim())
-        .filter(Boolean);
-
-      top.forEach(n => {
-        if (detailCache.has(n)) return;
-        prefetchOrderDetail_(n).catch(()=>{});
-      });
-    } catch (e) {}
+        .filter(Boolean)
+        .forEach(n => {
+          if (detailCache.has(n)) return;
+          prefetchOrderDetail_(n).catch(()=>{});
+        });
+    }catch(e){}
   }
 
-  function warmImagesForOrder_(orderObj) {
-    try {
+  function warmImagesForOrder_(orderObj){
+    try{
       const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
       items.forEach(it => {
         const urls = [];
@@ -1639,98 +1081,66 @@ async function setOrderStatus_(status, note) {
         if (it && Array.isArray(it.altImageUrls)) urls.push(...it.altImageUrls);
         urls.filter(Boolean).slice(0,2).forEach(u => { const img = new Image(); img.src = u; });
       });
-    } catch (e) {}
+    }catch(e){}
   }
 
-  function applyOrderToModal_(o) {
-    const kv = document.getElementById("odKV");
-    kv.innerHTML = "";
+  const settingsModal = document.getElementById("settingsModal");
+  const orderModal = document.getElementById("orderModal");
 
-    addKV(kv, "Order", o.OrderNumber);
-    addKV(kv, "Naam", o.CustomerName);
-    addKV(kv, "Tel", o.CustomerPhone);
-    addKV(kv, "Email", o.CustomerEmail);
-    addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
-    addKV(kv, "Status", o.OrderStatus);
-addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+  document.getElementById("btnSettings").onclick = () => {
+    document.getElementById("apiBase").value = getApiBase();
+    document.getElementById("pingResult").textContent = "";
+    settingsModal.classList.add("show");
+  };
 
-    const items = Array.isArray(o.Items) ? o.Items : [];
-    pickChecks = normalizePickChecks_(items, o.PickChecks);
-    if (currentOrder && String(currentOrder.OrderNumber||"") === String(o.OrderNumber||"")) {
-      currentOrder.PickChecks = pickChecks;
-      currentOrder.PickComplete = !!o.PickComplete;
+  document.getElementById("closeSettings").onclick = () => settingsModal.classList.remove("show");
+  settingsModal.addEventListener("click", e => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
+
+  document.getElementById("btnSaveApi").onclick = async () => {
+    setApiBase(document.getElementById("apiBase").value);
+    await loadBuildInfo();
+    TABS.forEach(t => { dirty[t] = true; cachesLoaded[t] = false; });
+    await safeLoadOrders(true);
+    settingsModal.classList.remove("show");
+  };
+
+  document.getElementById("btnTestPing").onclick = async () => {
+    setApiBase(document.getElementById("apiBase").value);
+    const el = document.getElementById("pingResult");
+    el.textContent = "Testing…";
+    try{
+      const res = await api("ping");
+      el.textContent = res && res.ok ? `OK: ${res.build} @ ${res.time}` : `Fail: ${(res && res.error) || "unknown"}`;
+    }catch(e){
+      el.textContent = "Error: " + (e.message || String(e));
     }
-    updatePickUI_();
-    document.getElementById("odItemsCount").textContent = `${items.length} item(s)`;
+  };
 
-    const itemsWrap = document.getElementById("odItems");
-    itemsWrap.innerHTML = "";
-    items.forEach((it, idx) => {
-      const row = document.createElement("div");
-      row.className = "item";
+  document.getElementById("closeOrder").onclick = () => orderModal.classList.remove("show");
+  orderModal.addEventListener("click", e => { if (e.target === orderModal) orderModal.classList.remove("show"); });
 
-      const pickWrap = document.createElement("div");
-      pickWrap.className = "pickCol";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.className = "pickCb";
-      cb.checked = !!pickChecks[idx];
-      cb.onchange = () => {
-  pickChecks[idx] = !!cb.checked;
-  currentOrder.PickChecks = pickChecks;
+  document.getElementById("tabPick").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("pick"); });
+  document.getElementById("tabReady").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("ready"); });
+  document.getElementById("tabHandled").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("handled"); });
 
-  // Optimistic: enable/disable "Afgehandeld" instantly based on local completion
-  const pc = computePickComplete_(pickChecks);
-  currentOrder.PickComplete = pc;
-  updatePickUI_();
+  document.getElementById("btnRefresh").onclick = async () => {
+    dirty[currentTab] = true;
+    await safeLoadOrders(true);
+  };
 
-  // Keep list caches in sync immediately (no refetch)
-  updateOrderInCaches_(String(currentOrder.OrderNumber || "").trim(), { PickChecks: pickChecks, PickComplete: pc });
-  applyTabView_({ prefetch: false });
+  document.getElementById("btnMarkReady").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{
+      if (resEl) resEl.textContent = "";
+      await markCurrentOrderReady_();
+    }catch(e){
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+    }
+  };
 
-  scheduleSavePickChecks_();
-};
-
-      pickWrap.appendChild(cb);
-
-      const img = document.createElement("img");
-      img.className = "thumb";
-      img.alt = "";
-      img.src = firstImageUrl(it) || "";
-      img.onerror = () => { img.style.display = "none"; };
-
-      const meta = document.createElement("div");
-      const qty = Number(it.qty || 1);
-      const name = it.name || "";
-      meta.innerHTML = `<div class="itName"><span class="itQty">${qty}×</span>${escapeHtml(name)}</div>`;
-
-      const opts = formatOptions(it.options);
-      if (opts) {
-        const d = document.createElement("div");
-        d.className = "itOpt";
-        d.textContent = opts;
-        meta.appendChild(d);
-      }
-
-      row.appendChild(pickWrap);
-      row.appendChild(img);
-      row.appendChild(meta);
-      itemsWrap.appendChild(row);
-    });
-
-    warmImagesForOrder_(o);
-  }
-function debounce_(fn, ms){
-    let t = null;
-    return (...args) => {
-      if (t) clearTimeout(t);
-      t = setTimeout(() => fn(...args), ms);
-    };
-  }
-
-  // bootstrap
-  (async function init() {
+  (async function init(){
     loadDetailCacheFromSession_();
+
     const sb = document.getElementById("searchBox");
     if (sb) {
       sb.addEventListener("input", () => {
@@ -1738,11 +1148,11 @@ function debounce_(fn, ms){
         renderCurrent_();
       });
     }
+
     await loadBuildInfo();
-    await safeLoadOrders();
-    refreshTabCount_("open");
-    refreshTabCount_("closed");
-if (!getApiBase()) {
+    await safeLoadOrders(true);
+
+    if (!getApiBase()) {
       document.getElementById("hint").textContent = "Open Settings en plak je Apps Script /exec URL.";
     }
   })();
