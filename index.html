@@ -95,6 +95,12 @@
     .card[data-workflow="PICK"]{ --accent:#2563eb; }
     .card[data-workflow="READY"]{ --accent:#25D366; }
     .card[data-workflow="HANDLED"]{ --accent:#128C7E; opacity:.92; }
+    .card.saveFailed{
+      border-color:rgba(220,38,38,.55) !important;
+      background:#fff7f7 !important;
+      box-shadow:0 0 0 2px rgba(220,38,38,.10), var(--wa-shadow) !important;
+    }
+    .card.saveFailed::before{ background:#dc2626 !important; }
 
     .cardRow1{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
     .cardRow2{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin-top:6px; }
@@ -122,6 +128,53 @@
     .dayGroupChevron.collapsed{ transform:rotate(-90deg); }
     .dayGroupTitle{ font-weight:950; font-size:13px; color:rgba(11,27,20,.80); text-transform:capitalize; }
     .dayGroupMeta{ font-size:12px; color:rgba(11,27,20,.55); font-weight:900; white-space:nowrap; }
+
+
+    .item.multiQty{
+      border-color:rgba(220,38,38,.55) !important;
+      background:#fff7f7 !important;
+      box-shadow:0 0 0 2px rgba(220,38,38,.08);
+    }
+    .item.multiQty .itName{
+      font-size:16px;
+    }
+    .qtyBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:46px;
+      padding:6px 10px;
+      margin-right:8px;
+      border-radius:999px;
+      font-size:18px;
+      font-weight:950;
+      color:#fff;
+      background:#dc2626;
+      box-shadow:0 2px 8px rgba(220,38,38,.22);
+      vertical-align:middle;
+    }
+    .qtyBadge.normal{
+      color:inherit;
+      background:transparent;
+      box-shadow:none;
+      min-width:auto;
+      padding:0;
+      margin-right:6px;
+      font-size:inherit;
+    }
+    .multiQtyWarning{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      margin-top:6px;
+      padding:6px 9px;
+      border-radius:10px;
+      font-size:12px;
+      font-weight:900;
+      color:#991b1b;
+      background:#fee2e2;
+      border:1px solid #fecaca;
+    }
 
     .modalBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-end; z-index:1000; }
     .modalBackdrop.show{ display:flex; }
@@ -196,7 +249,54 @@
       .name{ font-size:14px; }
       .cardDt{ font-size:11px; }
       .pill{ font-size:11px; padding:4px 8px; }
-      .modalBackdrop{ align-items:stretch; }
+  
+    .item.multiQty{
+      border-color:rgba(220,38,38,.55) !important;
+      background:#fff7f7 !important;
+      box-shadow:0 0 0 2px rgba(220,38,38,.08);
+    }
+    .item.multiQty .itName{
+      font-size:16px;
+    }
+    .qtyBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:46px;
+      padding:6px 10px;
+      margin-right:8px;
+      border-radius:999px;
+      font-size:18px;
+      font-weight:950;
+      color:#fff;
+      background:#dc2626;
+      box-shadow:0 2px 8px rgba(220,38,38,.22);
+      vertical-align:middle;
+    }
+    .qtyBadge.normal{
+      color:inherit;
+      background:transparent;
+      box-shadow:none;
+      min-width:auto;
+      padding:0;
+      margin-right:6px;
+      font-size:inherit;
+    }
+    .multiQtyWarning{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      margin-top:6px;
+      padding:6px 9px;
+      border-radius:10px;
+      font-size:12px;
+      font-weight:900;
+      color:#991b1b;
+      background:#fee2e2;
+      border:1px solid #fecaca;
+    }
+
+    .modalBackdrop{ align-items:stretch; }
       .sheet{ max-height:92vh; padding:12px; border-radius:16px 16px 0 0; }
       .kv{ grid-template-columns:92px 1fr; font-size:12px; }
       .input{ width:100%; max-width:none; }
@@ -321,8 +421,12 @@
   const renderSigByTab = { pick: null, ready: null, return: null, handled: null };
 
   const detailCache = new Map();
+  const failedActions = {}; // session-only: orderNumber -> {type,message,time}
   const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v2";
   const DETAIL_PREFETCH_LIMIT = 8;
+  const BACKGROUND_SYNC_MS = 60000;
+  let backgroundSyncTimer = null;
+  let backgroundSyncRunning = false;
 
   function getApiBase(){
     return (localStorage.getItem(LS_KEY) || localStorage.getItem("pq_api_base_v1") || "").trim();
@@ -515,6 +619,27 @@
     return "Handled";
   }
 
+
+  function markFailedAction_(orderNumber, type, message){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return;
+    failedActions[ord] = {
+      type: type || "SAVE_FAILED",
+      message: String(message || "Save failed"),
+      time: new Date().toISOString()
+    };
+  }
+
+  function clearFailedAction_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (ord && failedActions[ord]) delete failedActions[ord];
+  }
+
+  function getFailedAction_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    return ord ? (failedActions[ord] || null) : null;
+  }
+
   function getListEl_(tab){
     if (tab === "ready") return document.getElementById("listReady");
     if (tab === "return") return document.getElementById("listReturn");
@@ -588,6 +713,8 @@
       const workflow = normWorkflow_(o.WorkflowStatus);
       card.className = "card";
       card.dataset.workflow = workflow;
+      const failedAction = getFailedAction_(o.OrderNumber);
+      if (failedAction) card.classList.add("saveFailed");
       card.onclick = () => openOrder(o.OrderNumber);
 
       const dateForCard = activeTab === "handled" ? (o.HandledAt || o.ReturnedAt || o.ReturnAt || o.ReadyAt || o.CreatedAt)
@@ -614,6 +741,12 @@
       const pills = document.createElement("div");
       pills.className = "pills";
       pills.appendChild(pill("Workflow: " + displayWorkflow_(workflow), workflowKind));
+      if (failedAction) {
+        pills.appendChild(pill("Save failed", "bad"));
+        pills.appendChild(pill("Tap to retry", "bad"));
+      }
+      const hasMultiQty = Array.isArray(o.Items) && o.Items.some(it => Number(it && it.qty || 1) > 1);
+      if (hasMultiQty) pills.appendChild(pill("⚠ Meerdere stuks", "bad"));
       if (workflow === "READY") {
         const age = document.createElement("span");
         const bucket = readyAgeBucket_(o);
@@ -729,6 +862,7 @@
       const res = await api(ACTION_BY_TAB[tab]);
       if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + ACTION_BY_TAB[tab] + ")");
       pools[tab] = sortNewestFirst_(res.orders || [], tab);
+      seedDetailCacheFromList_(pools[tab]);
       cachesLoaded[tab] = true;
       dirty[tab] = false;
       versions[tab]++;
@@ -751,7 +885,26 @@
     try{
       await ensureTabData_(currentTab, force);
       renderCurrent_();
-      prefetchTopDetails_(filterOrders_(pools[currentTab] || []));
+      // Details are preloaded in the tab list response. No separate getOrder prefetch needed.
+    }finally{
+      if (showSpinner && btn) { btn.classList.remove("loading"); btn.disabled = false; }
+    }
+  }
+
+  async function loadOperationalTabs_(force = false, showSpinner = false){
+    const btn = document.getElementById("btnRefresh");
+    if (showSpinner && btn) { btn.classList.add("loading"); btn.disabled = true; }
+
+    try{
+      await Promise.all([
+        ensureTabData_("pick", force),
+        ensureTabData_("ready", force),
+        ensureTabData_("return", force)
+      ]);
+
+      updateAllBadges_();
+      renderCurrent_();
+
     }finally{
       if (showSpinner && btn) { btn.classList.remove("loading"); btn.disabled = false; }
     }
@@ -759,7 +912,11 @@
 
   async function safeLoadOrders(force = true){
     try{
-      await loadCurrentTab_({ force: !!force, showSpinner: true });
+      if (currentTab === "handled") {
+        await loadCurrentTab_({ force: !!force, showSpinner: true });
+      } else {
+        await loadOperationalTabs_(!!force, true);
+      }
       backgroundRefreshCounts_();
     }catch(e){
       document.getElementById("hint").textContent = "Error loading orders: " + (e.message || String(e));
@@ -793,19 +950,58 @@
   }
 
   async function backgroundRefreshCounts_(){
-    ["pick","ready","return"].forEach(t => {
-      if (t === currentTab && cachesLoaded[t]) {
-        updateTabBadge_(t, pools[t].length);
-        if (t === "ready") updateReadyFilterCounts_();
-        return;
-      }
-      ensureTabData_(t, false).then(() => {
-        updateTabBadge_(t, pools[t].length);
-        if (t === "ready") updateReadyFilterCounts_();
-      }).catch(()=>{});
-    });
-    // Handled is history; load it only when the Handled tab is opened.
-    if (cachesLoaded.handled) updateTabBadge_("handled", pools.handled.length);
+    // No network reload after actions. Local cache is source of truth until the periodic background sync.
+    updateAllBadges_();
+    return;
+  }
+
+  async function quietRefreshTab_(tab){
+    if (!["pick","ready","return"].includes(tab)) return;
+    if (loading[tab]) return loading[tab];
+
+    loading[tab] = (async () => {
+      const action = ACTION_BY_TAB[tab];
+      const res = await api(action);
+      if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + action + ")");
+
+      pools[tab] = sortNewestFirst_(res.orders || [], tab);
+      seedDetailCacheFromList_(pools[tab]);
+      cachesLoaded[tab] = true;
+      dirty[tab] = false;
+      versions[tab]++;
+      renderSigByTab[tab] = null;
+
+      updateTabBadge_(tab, pools[tab].length);
+      if (tab === "ready") updateReadyFilterCounts_();
+
+      const modalOpen = document.getElementById("orderModal") && document.getElementById("orderModal").classList.contains("show");
+      if (tab === currentTab && !modalOpen) renderCurrent_();
+    })();
+
+    try { await loading[tab]; }
+    finally { loading[tab] = null; }
+  }
+
+  async function backgroundSyncOperationalTabs_(){
+    if (backgroundSyncRunning) return;
+    if (!getApiBase()) return;
+
+    backgroundSyncRunning = true;
+    try{
+      await Promise.all([
+        quietRefreshTab_("pick").catch(()=>{}),
+        quietRefreshTab_("ready").catch(()=>{}),
+        quietRefreshTab_("return").catch(()=>{})
+      ]);
+      setDebug_("background sync ok • " + new Date().toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit", second:"2-digit" }));
+    }finally{
+      backgroundSyncRunning = false;
+    }
+  }
+
+  function startBackgroundSync_(){
+    if (backgroundSyncTimer) clearInterval(backgroundSyncTimer);
+    backgroundSyncTimer = setInterval(backgroundSyncOperationalTabs_, BACKGROUND_SYNC_MS);
   }
 
   async function loadBuildInfo(){
@@ -923,7 +1119,7 @@
         currentOrder = cached;
         initPickState_(currentOrder);
         applyOrderToModal_(currentOrder);
-        prefetchOrderDetail_(orderNumber, true).then(fresh => {
+        prefetchOrderDetail_(orderNumber, false).then(fresh => {
           if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
             currentOrder = fresh;
             initPickState_(fresh);
@@ -933,7 +1129,7 @@
         return;
       }
 
-      const fresh = await prefetchOrderDetail_(orderNumber, true);
+      const fresh = await prefetchOrderDetail_(orderNumber, false);
       if (!fresh) throw new Error("Order not found");
       currentOrder = fresh;
       initPickState_(currentOrder);
@@ -954,6 +1150,19 @@
     const kv = document.getElementById("odKV");
     kv.innerHTML = "";
 
+    const failedAction = getFailedAction_(o.OrderNumber);
+    if (failedAction) {
+      const a = document.createElement("div");
+      a.className = "muted";
+      a.textContent = "Warning";
+      const b = document.createElement("div");
+      b.style.color = "#b91c1c";
+      b.style.fontWeight = "900";
+      b.textContent = "⚠️ Save failed. Please verify items and try Markeer als Ready again.";
+      kv.appendChild(a);
+      kv.appendChild(b);
+    }
+
     addKV(kv, "Order", o.OrderNumber);
     addKV(kv, "Naam", o.CustomerName);
     addKV(kv, "Tel", o.CustomerPhone);
@@ -967,6 +1176,18 @@
     addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
 
     const items = Array.isArray(o.Items) ? o.Items : [];
+    const multiQtyItems = items.filter(it => Number(it && it.qty || 1) > 1);
+    if (multiQtyItems.length) {
+      const a = document.createElement("div");
+      a.className = "muted";
+      a.textContent = "Let op";
+      const b = document.createElement("div");
+      b.style.color = "#b91c1c";
+      b.style.fontWeight = "950";
+      b.textContent = "Deze order bevat item(s) met meerdere stuks. Controleer aantallen extra goed.";
+      kv.appendChild(a);
+      kv.appendChild(b);
+    }
     pickChecks = normalizePickChecks_(items, o.PickChecks);
     if (currentOrder && String(currentOrder.OrderNumber || "") === String(o.OrderNumber || "")) {
       currentOrder.PickChecks = pickChecks;
@@ -995,10 +1216,14 @@
         currentOrder.PickChecks = pickChecks;
         const pc = computePickComplete_(pickChecks);
         currentOrder.PickComplete = pc;
+
+        // Local-only while picking. We save once when Markeer als Ready is clicked.
         updatePickUI_();
         updateOrderInCaches_(String(currentOrder.OrderNumber || "").trim(), { PickChecks: pickChecks, PickComplete: pc });
         renderCurrent_();
-        scheduleSavePickChecks_();
+
+        const resEl = document.getElementById("odActionResult");
+        if (resEl) resEl.textContent = pc ? "Alle items aangevinkt. Klaar om te markeren als Ready." : "";
       };
 
       pickWrap.appendChild(cb);
@@ -1011,10 +1236,15 @@
       const body = document.createElement("div");
       body.style.flex = "1";
       const qty = Number(it.qty || 1);
+      const isMultiQty = qty > 1;
+      if (isMultiQty) row.classList.add("multiQty");
       const opts = formatOptions(it.options);
 
       body.innerHTML = `
-        <div class="itName"><span class="itQty">${escapeHtml(qty)}x</span>${escapeHtml(it.name || "")}</div>
+        <div class="itName">
+          <span class="qtyBadge ${isMultiQty ? "" : "normal"}">${escapeHtml(qty)}x</span>${escapeHtml(it.name || "")}
+        </div>
+        ${isMultiQty ? `<div class="multiQtyWarning">⚠ Let op: ${escapeHtml(qty)} stuks pakken</div>` : ""}
         ${opts ? `<div class="itOpt">${escapeHtml(opts)}</div>` : ""}
       `;
 
@@ -1030,28 +1260,8 @@
   }
 
   function scheduleSavePickChecks_(){
-    if (!currentOrder) return;
-    currentOrder.PickChecks = pickChecks;
-    clearTimeout(pickSaveTimer);
-
-    pickSaveTimer = setTimeout(() => {
-      const orderNumber = String(currentOrder.OrderNumber || "").trim();
-      const payload = { orderNumber, checks: JSON.stringify(pickChecks) };
-      const resEl = document.getElementById("odActionResult");
-      if (resEl) resEl.textContent = "Pick checks opslaan…";
-
-      api("setPickChecks", payload).then(res => {
-        if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
-        currentOrder.PickComplete = computePickComplete_(pickChecks);
-        currentOrder.PickChecks = pickChecks;
-        setCachedOrderDetail_(currentOrder);
-        updateOrderInCaches_(orderNumber, { PickComplete: currentOrder.PickComplete, PickChecks: pickChecks });
-        updatePickUI_();
-        if (resEl) resEl.textContent = "Opgeslagen ✅";
-      }).catch(e => {
-        if (resEl) resEl.textContent = "Pick save error: " + (e.message || String(e));
-      });
-    }, 250);
+    // Deprecated: pick checks are now saved once when Markeer als Ready is clicked.
+    return;
   }
 
   function moveOrderBetweenPools_(orderNumber, targetTab, patch){
@@ -1085,99 +1295,138 @@
 
     const modal = document.getElementById("orderModal");
     const resEl = document.getElementById("odActionResult");
-    if (resEl) resEl.textContent = "Ready opslaan…";
 
+    // Snapshot for rollback only if API fails.
     const previous = JSON.parse(JSON.stringify(pools));
+    const previousOrder = JSON.parse(JSON.stringify(currentOrder || {}));
+    const previousTab = currentTab;
     const now = new Date().toISOString();
 
+    // Instant UI: close modal and move the card immediately.
     currentOrder.WorkflowStatus = "READY";
     currentOrder.ReadyAt = now;
+    currentOrder.PickComplete = true;
+    currentOrder.PickChecks = pickChecks;
+
+    setCachedOrderDetail_(currentOrder);
+
+    if (modal) modal.classList.remove("show");
+    if (resEl) resEl.textContent = "";
 
     moveOrderBetweenPools_(orderNumber, "ready", {
       WorkflowStatus: "READY",
       ReadyAt: now,
-      PickComplete: true
+      PickComplete: true,
+      DetailPreloaded: true
     });
+
+    // Keep user on Pick tab; card disappears immediately.
     renderCurrent_();
 
-    try{
-      const res = await api("setWorkflowStatus", {
+    // Background save. Save checkmarks once, then move workflow to READY.
+    api("setPickChecks", {
+      orderNumber,
+      checks: JSON.stringify(pickChecks)
+    }).then(res => {
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
+
+      return api("setWorkflowStatus", {
         orderNumber,
         workflowStatus: "READY",
         source: "PickQueue"
       });
+    }).then(res => {
       if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set workflow status");
 
-      dirty.pick = true;
-      dirty.ready = true;
-      setCachedOrderDetail_(currentOrder);
-      if (modal) modal.classList.remove("show");
-      await loadCurrentTab_({ force: true, showSpinner: false });
+      clearFailedAction_(orderNumber);
+      dirty.pick = false;
+      dirty.ready = false;
       backgroundRefreshCounts_();
-    }catch(e){
+
+    }).catch(e => {
+      // Roll back if save failed.
       TABS.forEach(t => {
         pools[t] = previous[t] || [];
         versions[t]++;
         renderSigByTab[t] = null;
       });
-      updateAllBadges_();
-      renderCurrent_();
-      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
-      throw e;
-    }
-  }
 
+      currentOrder = previousOrder;
+      markFailedAction_(orderNumber, "READY_SAVE_FAILED", e.message || String(e));
+      updateOrderInCaches_(orderNumber, { SaveFailed: true });
+      updateAllBadges_();
+
+      if (previousTab) currentTab = previousTab;
+      renderCurrent_();
+
+      alert("Ready opslaan mislukt. De order staat terug in Pick met een rode waarschuwing.");
+    });
+  }
 
   async function markCurrentOrderReturned_(){
     if (!currentOrder) throw new Error("No order selected");
+
     const orderNumber = String(currentOrder.OrderNumber || "").trim();
     if (!orderNumber) throw new Error("Missing OrderNumber");
 
     const modal = document.getElementById("orderModal");
-    const resEl = document.getElementById("odActionResult");
-    if (resEl) resEl.textContent = "Return opslaan…";
 
     const previous = JSON.parse(JSON.stringify(pools));
+    const previousOrder = JSON.parse(JSON.stringify(currentOrder || {}));
+    const previousTab = currentTab;
     const now = new Date().toISOString();
 
+    // Instant UI: close modal and move card out of Return immediately.
     currentOrder.WorkflowStatus = "HANDLED";
     currentOrder.ReturnedAt = now;
     currentOrder.HandledAt = now;
     currentOrder.HandledSource = "PickQueue:returned_to_warehouse";
 
+    setCachedOrderDetail_(currentOrder);
+
+    if (modal) modal.classList.remove("show");
+
     moveOrderBetweenPools_(orderNumber, "handled", {
       WorkflowStatus: "HANDLED",
       ReturnedAt: now,
       HandledAt: now,
-      HandledSource: "PickQueue:returned_to_warehouse"
+      HandledSource: "PickQueue:returned_to_warehouse",
+      DetailPreloaded: true
     });
+
     renderCurrent_();
 
-    try{
-      const res = await api("setWorkflowStatus", {
-        orderNumber,
-        workflowStatus: "HANDLED",
-        source: "PickQueue:returned_to_warehouse"
-      });
+    // Background save. No forced reload on success.
+    api("setWorkflowStatus", {
+      orderNumber,
+      workflowStatus: "HANDLED",
+      source: "PickQueue:returned_to_warehouse",
+      note: "Received Back In Warehouse"
+    }).then(res => {
       if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set workflow status");
 
-      dirty.return = true;
-      dirty.handled = true;
-      setCachedOrderDetail_(currentOrder);
-      if (modal) modal.classList.remove("show");
-      await loadCurrentTab_({ force: true, showSpinner: false });
+      clearFailedAction_(orderNumber);
+      dirty.return = false;
+      dirty.handled = false;
       backgroundRefreshCounts_();
-    }catch(e){
+
+    }).catch(e => {
       TABS.forEach(t => {
         pools[t] = previous[t] || [];
         versions[t]++;
         renderSigByTab[t] = null;
       });
+
+      currentOrder = previousOrder;
+      markFailedAction_(orderNumber, "RETURN_RECEIVED_SAVE_FAILED", e.message || String(e));
+      updateOrderInCaches_(orderNumber, { SaveFailed: true });
       updateAllBadges_();
+
+      if (previousTab) currentTab = previousTab;
       renderCurrent_();
-      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
-      throw e;
-    }
+
+      alert("Return ontvangen opslaan mislukt. De order staat terug met een rode waarschuwing.");
+    });
   }
 
   function updateOrderInCaches_(orderNumber, patch){
@@ -1212,7 +1461,7 @@
 
   function saveDetailCacheToSession_(){
     try{
-      const entries = Array.from(detailCache.entries()).slice(0, 30);
+      const entries = Array.from(detailCache.entries()).slice(0, 200);
       const obj = {};
       entries.forEach(([k,v]) => obj[k] = v);
       sessionStorage.setItem(DETAIL_CACHE_SS_KEY, JSON.stringify(obj));
@@ -1225,6 +1474,29 @@
     return detailCache.get(key) || null;
   }
 
+
+  function seedDetailCacheFromList_(orders){
+    try{
+      if (!Array.isArray(orders) || !orders.length) return;
+      let changed = false;
+
+      orders.forEach(o => {
+        if (!o || !o.DetailPreloaded) return;
+        const key = String(o.OrderNumber || "").trim();
+        if (!key) return;
+
+        // Only seed if the response contains item details.
+        if (!Array.isArray(o.Items)) return;
+
+        detailCache.set(key, o);
+        warmImagesForOrder_(o);
+        changed = true;
+      });
+
+      if (changed) saveDetailCacheToSession_();
+    }catch(e){}
+  }
+
   function setCachedOrderDetail_(orderObj){
     if (!orderObj) return;
     const key = String(orderObj.OrderNumber || "").trim();
@@ -1232,6 +1504,13 @@
     detailCache.set(key, orderObj);
     saveDetailCacheToSession_();
   }
+
+
+  window.pqDetailCacheStats = function(){
+    try {
+      return { size: detailCache.size, keys: Array.from(detailCache.keys()) };
+    } catch(e) { return { error: String(e) }; }
+  };
 
   async function prefetchOrderDetail_(orderNumber, force = false){
     const key = String(orderNumber || "").trim();
@@ -1248,16 +1527,9 @@
   }
 
   function prefetchTopDetails_(orders){
-    try{
-      if (!Array.isArray(orders) || !orders.length) return;
-      orders.slice(0, DETAIL_PREFETCH_LIMIT)
-        .map(o => String(o.OrderNumber || "").trim())
-        .filter(Boolean)
-        .forEach(n => {
-          if (detailCache.has(n)) return;
-          prefetchOrderDetail_(n).catch(()=>{});
-        });
-    }catch(e){}
+    // Disabled intentionally. Active tab list responses already contain full order details.
+    // Keeping this as a no-op prevents old top-8 background getOrder calls.
+    return;
   }
 
   function warmImagesForOrder_(orderObj){
@@ -1354,6 +1626,7 @@
 
     await loadBuildInfo();
     await safeLoadOrders(true);
+    startBackgroundSync_();
 
     if (!getApiBase()) {
       document.getElementById("hint").textContent = "Open Settings en plak je Apps Script /exec URL.";
@@ -1361,62 +1634,307 @@
   })();
 </script>
 
+
+
+
+
+
+
 <script>
-/* Return workflow compatibility layer
-   - Adds support for "Received Back In Warehouse" button behavior if the base HTML exposes order modal/action elements.
-   - Uses action=setWorkflowStatus&workflowStatus=HANDLED&source=WarehouseReturn.
+/* Fixed lazy Handled loader
+   - Reuses the page's existing api() function when available.
+   - Falls back to all known localStorage API URL keys.
+   - Keeps range buttons visible only when Handled tab is active.
 */
 (function(){
-  function pqApiBase_(){
-    try { return (localStorage.getItem("pq_api_base_v1") || "").trim(); } catch(e){ return ""; }
+  window.pqHandledDays = window.pqHandledDays || 3;
+
+  function getKnownApiBase_(){
+    var keys = [
+      "pq_api_base_v1",
+      "pick_queue_api_base",
+      "apiBase",
+      "API_BASE",
+      "pq_api_base"
+    ];
+
+    for(var i = 0; i < keys.length; i++){
+      try{
+        var v = (localStorage.getItem(keys[i]) || "").trim();
+        if(v) return v;
+      }catch(e){}
+    }
+
+    try{
+      if(typeof getApiBase === "function"){
+        var g = String(getApiBase() || "").trim();
+        if(g) return g;
+      }
+    }catch(e){}
+
+    try{
+      var input = document.getElementById("apiBase");
+      if(input && input.value) return String(input.value || "").trim();
+    }catch(e){}
+
+    return "";
   }
-  function pqJsonp_(url){
+
+  function jsonp_(url){
     return new Promise(function(resolve, reject){
       var cbName = "cb_" + Math.random().toString(36).slice(2);
       var script = document.createElement("script");
-      var sep = url.indexOf("?") >= 0 ? "&" : "?";
-      script.src = url + sep + "callback=" + cbName + "&_=" + Date.now();
-      script.onerror = function(){ cleanup(); reject(new Error("JSONP load error")); };
-      window[cbName] = function(data){ cleanup(); resolve(data); };
+      script.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "callback=" + cbName + "&_=" + Date.now();
+
+      script.onerror = function(){
+        cleanup();
+        reject(new Error("JSONP load error"));
+      };
+
+      window[cbName] = function(data){
+        cleanup();
+        resolve(data);
+      };
+
       function cleanup(){
-        try { delete window[cbName]; } catch(e){ window[cbName] = undefined; }
+        try{ delete window[cbName]; }catch(e){ window[cbName] = undefined; }
         if(script && script.parentNode) script.parentNode.removeChild(script);
       }
+
       document.body.appendChild(script);
     });
   }
-  function pqApi_(action, params){
-    var base = pqApiBase_();
+
+  function callApi_(action, params){
+    params = params || {};
+
+    // Best path: reuse the original page api() function, because other tabs already work.
+    try{
+      if(typeof api === "function"){
+        return api(action, params);
+      }
+    }catch(e){}
+
+    var base = getKnownApiBase_();
     if(!base) return Promise.reject(new Error("Missing API base URL. Open Settings."));
+
     var u = new URL(base);
     u.search = "";
     u.hash = "";
     u.searchParams.set("action", action);
-    Object.keys(params || {}).forEach(function(k){ u.searchParams.set(k, params[k]); });
-    return pqJsonp_(u.toString());
+
+    Object.keys(params).forEach(function(k){
+      u.searchParams.set(k, params[k]);
+    });
+
+    return jsonp_(u.toString());
   }
+
+  function esc_(s){
+    return String(s || "").replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function formatMoney_(v){
+    var n = Number(v || 0);
+    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
+  }
+
+  function formatDate_(v){
+    if(!v) return "";
+    try{
+      var d = new Date(String(v).replace(" ", "T"));
+      if(isNaN(d.getTime())) return String(v);
+      return d.toLocaleDateString("nl-NL", { timeZone:"America/Paramaribo" }) + " · " +
+        d.toLocaleTimeString("nl-NL", { timeZone:"America/Paramaribo", hour:"2-digit", minute:"2-digit" });
+    }catch(e){
+      return String(v);
+    }
+  }
+
+  function ensureHandledArea_(){
+    var list = document.getElementById("listHandled") ||
+      document.querySelector('[data-list="handled"]') ||
+      document.querySelector("#handledList");
+
+    if(!list){
+      var wrap = document.querySelector(".wrap") || document.body;
+      list = document.createElement("div");
+      list.id = "listHandled";
+      list.className = "grid";
+      list.style.display = "none";
+      wrap.appendChild(list);
+    }
+
+    var controls = document.getElementById("handledRangeControls");
+    if(!controls){
+      controls = document.createElement("div");
+      controls.id = "handledRangeControls";
+      controls.style.display = "none";
+      controls.style.gap = "8px";
+      controls.style.flexWrap = "wrap";
+      controls.style.margin = "10px 0";
+      controls.innerHTML =
+        '<button class="btn" data-days="3">Last 3 days</button>' +
+        '<button class="btn" data-days="10">Next 7 days</button>' +
+        '<button class="btn" data-days="40">Next 30 days</button>' +
+        '<span class="muted" id="handledRangeInfo"></span>';
+
+      list.parentNode.insertBefore(controls, list);
+
+      controls.addEventListener("click", function(ev){
+        var btn = ev.target.closest("button[data-days]");
+        if(!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        window.pqHandledDays = Number(btn.getAttribute("data-days") || 3);
+        window.pqLoadHandledLazy_(window.pqHandledDays);
+      });
+    }
+
+    return { list:list, controls:controls };
+  }
+
+  function hideHandledControls_(){
+    var controls = document.getElementById("handledRangeControls");
+    if(controls) controls.style.display = "none";
+  }
+
+  function showHandledOnly_(){
+    // Hide common list containers, including old compatibility names.
+    ["listPick","listReady","listReturn","listOpen","listClosed"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = "none";
+    });
+
+    var area = ensureHandledArea_();
+    area.list.style.display = "grid";
+    area.controls.style.display = "flex";
+  }
+
+  function renderHandled_(orders, days){
+    var area = ensureHandledArea_();
+    var list = area.list;
+    list.innerHTML = "";
+
+    var info = document.getElementById("handledRangeInfo");
+    if(info) info.textContent = (orders || []).length + " order(s) loaded · last " + days + " days";
+
+    if(!orders || !orders.length){
+      list.innerHTML = '<div class="muted" style="padding:12px;">No handled orders in this range.</div>';
+      return;
+    }
+
+    orders.forEach(function(o){
+      var card = document.createElement("div");
+      card.className = "card";
+      card.dataset.status = "handled";
+      card.innerHTML =
+        '<div class="cardHead">' +
+          '<div class="cardRow1">' +
+            '<div class="ordno">' + esc_(o.OrderNumber) + '</div>' +
+            '<div class="total">' + esc_(formatMoney_(o.OrderTotalSRD)) + '</div>' +
+          '</div>' +
+          '<div class="cardRow2">' +
+            '<div class="name">' + esc_(o.CustomerName) + '</div>' +
+            '<div class="muted cardDt">' + esc_(formatDate_(o.HandledAt || o.ReturnedAt || o.ReadyAt || o.CreatedAt)) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pills">' +
+          '<span class="pill ok">Handled</span>' +
+          '<span class="pill">' + esc_(o.HandledSource || "—") + '</span>' +
+        '</div>';
+
+      list.appendChild(card);
+    });
+  }
+
+  window.pqLoadHandledLazy_ = async function(days){
+    days = Number(days || 3);
+    var area = ensureHandledArea_();
+    showHandledOnly_();
+    area.list.innerHTML = '<div class="muted" style="padding:12px;">Loading handled orders…</div>';
+
+    try{
+      var res = await callApi_("getHandledOrders", { days: days });
+      if(!res || !res.ok) throw new Error((res && res.error) || "Failed to load handled orders");
+      renderHandled_(res.orders || [], res.days || days);
+
+      var badge = document.getElementById("badgeHandled");
+      if(badge) badge.textContent = String((res.orders || []).length);
+
+    }catch(e){
+      area.list.innerHTML = '<div class="muted" style="padding:12px;">Error loading handled: ' + esc_(e.message || String(e)) + '</div>';
+    }
+  };
+
   window.pqMarkReturnReceived_ = async function(orderNumber){
     var on = String(orderNumber || "").trim();
     if(!on && window.currentOrder) on = String(window.currentOrder.OrderNumber || "").trim();
+
     if(!on){
       alert("Missing order number.");
       return;
     }
+
     if(!confirm("Mark this return as received back in warehouse?")) return;
+
     try{
-      var res = await pqApi_("setWorkflowStatus", {
+      var res = await callApi_("setWorkflowStatus", {
         orderNumber: on,
         workflowStatus: "HANDLED",
         source: "WarehouseReturn",
         note: "Received Back In Warehouse"
       });
+
       if(!res || !res.ok) throw new Error((res && res.error) || "Failed to update order");
+
       alert("Return received and moved to Handled.");
       location.reload();
+
     }catch(e){
       alert("Error: " + (e && e.message ? e.message : String(e)));
     }
   };
+
+  function bindTabs_(){
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+
+    tabs.forEach(function(tab){
+      var text = String(tab.textContent || "").toLowerCase();
+      var isHandled = (tab.dataset && tab.dataset.tab === "handled") || text.indexOf("handled") >= 0 || text.indexOf("afgehandeld") >= 0;
+
+      if(isHandled){
+        if(tab.dataset.lazyHandledBound === "1") return;
+        tab.dataset.lazyHandledBound = "1";
+
+        tab.addEventListener("click", function(ev){
+          ev.preventDefault();
+          ev.stopPropagation();
+
+          tabs.forEach(function(t){ t.classList.remove("active"); });
+          tab.classList.add("active");
+
+          window.pqLoadHandledLazy_(window.pqHandledDays || 3);
+        }, true);
+
+      } else {
+        // Any non-handled tab should hide handled controls immediately.
+        tab.addEventListener("click", function(){
+          hideHandledControls_();
+          var handledList = document.getElementById("listHandled");
+          if(handledList) handledList.style.display = "none";
+        }, true);
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    ensureHandledArea_();
+    hideHandledControls_();
+    bindTabs_();
+  });
 })();
 </script>
 
