@@ -94,6 +94,7 @@
     }
     .card[data-workflow="PICK"]{ --accent:#2563eb; }
     .card[data-workflow="READY"]{ --accent:#25D366; }
+    .card[data-workflow="DISPATCH"]{ --accent:#f97316; }
     .card[data-workflow="HANDLED"]{ --accent:#128C7E; opacity:.92; }
     .card.saveFailed{
       border-color:rgba(220,38,38,.55) !important;
@@ -117,6 +118,8 @@
     .pill.ok{ border-color:rgba(37,211,102,.35); background:rgba(37,211,102,.12); }
     .pill.warn{ border-color:rgba(255,194,66,.45); background:rgba(255,194,66,.14); }
     .pill.bad{ border-color:rgba(231,76,60,.40); background:rgba(231,76,60,.12); }
+    .pill.delivery{ border-color:rgba(37,99,235,.35); background:rgba(37,99,235,.12); color:#1d4ed8; font-weight:950; }
+    .pill.pickup{ border-color:rgba(18,140,126,.35); background:rgba(18,140,126,.12); color:#0f766e; font-weight:950; }
 
     .dayGroupHeader{
       display:flex; justify-content:space-between; align-items:baseline; gap:10px;
@@ -320,6 +323,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="pick" id="tabPick">Pick<span class="badge" id="badgePick">0</span></button>
     <button class="tab" data-tab="ready" id="tabReady">Ready<span class="badge" id="badgeReady">0</span></button>
+    <button class="tab" data-tab="dispatch" id="tabDispatch">Dispatch<span class="badge" id="badgeDispatch">0</span></button>
     <button class="tab" data-tab="return" id="tabReturn">Return<span class="badge" id="badgeReturn">0</span></button>
     <button class="tab" data-tab="handled" id="tabHandled">Handled<span class="badge" id="badgeHandled">0</span></button>
   </div>
@@ -332,9 +336,16 @@
       <button class="filterBtn" data-ready-filter="mid">1-3 Days <span id="rfMid">0</span></button>
       <button class="filterBtn" data-ready-filter="old">4+ Days <span id="rfOld">0</span></button>
     </div>
+    <div class="readyFilters" id="dispatchFilters">
+      <button type="button" class="filterBtn active" data-dispatch-filter="all">All <span id="dfAll">0</span></button>
+      <button type="button" class="filterBtn" data-dispatch-filter="unassigned">Unassigned <span id="dfUnassigned">0</span></button>
+      <button type="button" class="filterBtn" data-dispatch-filter="assigned">Assigned <span id="dfAssigned">0</span></button>
+      <span id="dispatchCourierFilters" style="display:flex; gap:8px; flex-wrap:wrap;"></span>
+    </div>
     <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
     <div class="grid" id="listPick"></div>
     <div class="grid" id="listReady" style="display:none;"></div>
+    <div class="grid" id="listDispatch" style="display:none;"></div>
     <div class="grid" id="listReturn" style="display:none;"></div>
     <div class="grid" id="listHandled" style="display:none;"></div>
   </div>
@@ -389,6 +400,10 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn" id="btnMarkReady" disabled>Markeer als Ready</button>
+          <select class="input" id="courierSelect" style="display:none; width:220px; max-width:100%;"></select>
+          <button class="btn" id="btnAssignCourier" style="display:none;">Assign Courier</button>
+          <button class="btn" id="btnUnassignCourier" style="display:none;">Unassign Courier</button>
+          <button class="btn" id="btnPrintOrderLabel">Print Label</button>
         </div>
         <div class="muted" id="odActionResult" style="margin-top:10px;"></div>
       </div>
@@ -398,10 +413,11 @@
 <script>
   const LS_KEY = "pq_api_base_v2";
   const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
-  const TABS = ["pick","ready","return","handled"];
+  const TABS = ["pick","ready","dispatch","return","handled"];
   const ACTION_BY_TAB = {
     pick: "getPickOrders",
     ready: "getReadyOrders",
+    dispatch: "getDispatchOrders",
     return: "getReturnOrders",
     handled: "getHandledOrders"
   };
@@ -410,18 +426,23 @@
   let currentOrder = null;
   let searchQuery = "";
   let readyFilter = "all";
+  let dispatchFilter = "all";
   let pickChecks = [];
   let pickSaveTimer = null;
+  let couriers = [];
 
-  const pools = { pick: [], ready: [], return: [], handled: [] };
-  const cachesLoaded = { pick: false, ready: false, return: false, handled: false };
-  const dirty = { pick: true, ready: true, return: true, handled: true };
-  const loading = { pick: null, ready: null, return: null, handled: null };
-  const versions = { pick: 0, ready: 0, return: 0, handled: 0 };
-  const renderSigByTab = { pick: null, ready: null, return: null, handled: null };
+  const pools = { pick: [], ready: [], dispatch: [], return: [], handled: [] };
+  const cachesLoaded = { pick: false, ready: false, dispatch: false, return: false, handled: false };
+  const dirty = { pick: true, ready: true, dispatch: true, return: true, handled: true };
+  const loading = { pick: null, ready: null, dispatch: null, return: null, handled: null };
+  const versions = { pick: 0, ready: 0, dispatch: 0, return: 0, handled: 0 };
+  const renderSigByTab = { pick: null, ready: null, dispatch: null, return: null, handled: null };
 
   const detailCache = new Map();
-  const failedActions = {}; // session-only: orderNumber -> {type,message,time}
+  const failedActions = {}; // sessionStorage-backed: orderNumber -> {type,message,time}
+  const pendingCourierAssignments = {}; // sessionStorage-backed: orderNumber -> courier assignment patch
+  const FAILED_ACTIONS_SS_KEY = "pq_failed_actions_v1";
+  const PENDING_COURIER_SS_KEY = "pq_pending_courier_assignments_v1";
   const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v2";
   const DETAIL_PREFETCH_LIMIT = 8;
   const BACKGROUND_SYNC_MS = 60000;
@@ -503,14 +524,15 @@
       const ta = msForTab_(a, tab);
       const tb = msForTab_(b, tab);
       // Ready tab is operational: oldest waiting first.
-      if (tab === "ready" || tab === "return") return ta - tb;
+      if (tab === "ready" || tab === "dispatch" || tab === "return") return ta - tb;
       return tb - ta;
     });
   }
 
   function msForTab_(o, tab){
     if (tab === "handled") return msFromAny_(o && (o.HandledAt || o.ReturnedAt || o.ReturnAt || o.ReadyAt || o.CreatedAt));
-    if (tab === "return") return msFromAny_(o && (o.ReturnAt || o.ReadyAt || o.CreatedAt));
+    if (tab === "return") return msFromAny_(o && (o.ReturnAt || o.ReadyAt || o.DispatchAt || o.CreatedAt));
+    if (tab === "dispatch") return msFromAny_(o && (o.DispatchAt || o.CreatedAt));
     if (tab === "ready") return msFromAny_(o && (o.ReadyAt || o.CreatedAt));
     return msFromAny_(o && (o.CreatedAt || o.ReadyAt || o.HandledAt));
   }
@@ -561,6 +583,72 @@
     set("rfOld", counts.old);
   }
 
+  function updateDispatchFilterCounts_(){
+    const arr = Array.isArray(pools.dispatch) ? pools.dispatch : [];
+    const counts = { all: arr.length, unassigned: 0, assigned: 0 };
+
+    arr.forEach(o => {
+      if (String(o && o.CourierId || "").trim()) counts.assigned++;
+      else counts.unassigned++;
+    });
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+    set("dfAll", counts.all);
+    set("dfUnassigned", counts.unassigned);
+    set("dfAssigned", counts.assigned);
+  }
+
+  function renderDispatchCourierFilters_(){
+    const wrap = document.getElementById("dispatchCourierFilters");
+    if (!wrap) return;
+
+    wrap.innerHTML = "";
+
+    const arr = Array.isArray(pools.dispatch) ? pools.dispatch : [];
+    const byCourier = {};
+
+    arr.forEach(o => {
+      const id = String(o && o.CourierId || "").trim();
+      if (!id) return;
+      const name = String(o && o.CourierName || id).trim();
+      if (!byCourier[id]) byCourier[id] = { id, name, count: 0 };
+      byCourier[id].count++;
+    });
+
+    // Use active courier list first, then any courier found in current dispatch data.
+    const seen = {};
+    (couriers || []).forEach(c => {
+      const id = String(c && c.CourierId || "").trim();
+      if (!id) return;
+      const count = byCourier[id] ? byCourier[id].count : 0;
+      if (!count) return;
+      seen[id] = true;
+      wrap.appendChild(buildDispatchCourierFilterButton_(id, String(c.Name || id), count));
+    });
+
+    Object.keys(byCourier).sort((a,b) => byCourier[a].name.localeCompare(byCourier[b].name)).forEach(id => {
+      if (seen[id]) return;
+      const c = byCourier[id];
+      wrap.appendChild(buildDispatchCourierFilterButton_(c.id, c.name, c.count));
+    });
+  }
+
+  function buildDispatchCourierFilterButton_(courierId, name, count){
+    const btn = document.createElement("button");
+    btn.className = "filterBtn";
+    btn.type = "button";
+    btn.setAttribute("data-dispatch-filter", "courier:" + courierId);
+    btn.textContent = name + " " + count;
+    if (dispatchFilter === "courier:" + courierId) btn.classList.add("active");
+    return btn;
+  }
+
+  function syncDispatchFilterActiveButtons_(){
+    document.querySelectorAll("[data-dispatch-filter]").forEach(b => {
+      b.classList.toggle("active", b.getAttribute("data-dispatch-filter") === dispatchFilter);
+    });
+  }
+
   function formatSRD(v){
     const n = Number(v || 0);
     return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits: 2, useGrouping: false });
@@ -598,6 +686,7 @@
   function normWorkflow_(s){
     const x = String(s || "").trim().toUpperCase();
     if (x === "READY") return "READY";
+    if (x === "DISPATCH") return "DISPATCH";
     if (x === "RETURN") return "RETURN";
     if (x === "HANDLED") return "HANDLED";
     return "PICK";
@@ -606,6 +695,7 @@
   function tabForWorkflow_(s){
     const st = normWorkflow_(s);
     if (st === "READY") return "ready";
+    if (st === "DISPATCH") return "dispatch";
     if (st === "RETURN") return "return";
     if (st === "HANDLED") return "handled";
     return "pick";
@@ -615,8 +705,21 @@
     const st = normWorkflow_(s);
     if (st === "PICK") return "Pick";
     if (st === "READY") return "Ready";
+    if (st === "DISPATCH") return "Dispatch";
     if (st === "RETURN") return "Return";
     return "Handled";
+  }
+
+
+
+  function normFulfillmentType_(s){
+    const x = String(s || "").trim().toUpperCase();
+    if (x === "DELIVERY") return "DELIVERY";
+    return "PICKUP";
+  }
+
+  function displayFulfillmentType_(s){
+    return normFulfillmentType_(s) === "DELIVERY" ? "🚚 DELIVERY" : "🏪 PICKUP";
   }
 
 
@@ -628,11 +731,15 @@
       message: String(message || "Save failed"),
       time: new Date().toISOString()
     };
+    saveFailedActionsToSession_();
   }
 
   function clearFailedAction_(orderNumber){
     const ord = String(orderNumber || "").trim();
-    if (ord && failedActions[ord]) delete failedActions[ord];
+    if (ord && failedActions[ord]) {
+      delete failedActions[ord];
+      saveFailedActionsToSession_();
+    }
   }
 
   function getFailedAction_(orderNumber){
@@ -640,8 +747,113 @@
     return ord ? (failedActions[ord] || null) : null;
   }
 
+  function saveFailedActionsToSession_(){
+    try { sessionStorage.setItem(FAILED_ACTIONS_SS_KEY, JSON.stringify(failedActions)); } catch(e){}
+  }
+
+  function loadFailedActionsFromSession_(){
+    try{
+      const raw = sessionStorage.getItem(FAILED_ACTIONS_SS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== "object") return;
+      Object.keys(obj).forEach(k => { failedActions[k] = obj[k]; });
+    }catch(e){}
+  }
+
+  function savePendingCourierAssignmentsToSession_(){
+    try { sessionStorage.setItem(PENDING_COURIER_SS_KEY, JSON.stringify(pendingCourierAssignments)); } catch(e){}
+  }
+
+  function loadPendingCourierAssignmentsFromSession_(){
+    try{
+      const raw = sessionStorage.getItem(PENDING_COURIER_SS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== "object") return;
+      Object.keys(obj).forEach(k => { pendingCourierAssignments[k] = obj[k]; });
+    }catch(e){}
+  }
+
+  function setPendingCourierAssignment_(orderNumber, patch){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return;
+    pendingCourierAssignments[ord] = Object.assign({}, patch || {}, {
+      PendingCourierAssignment: true
+    });
+    savePendingCourierAssignmentsToSession_();
+  }
+
+  function clearPendingCourierAssignment_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (ord && pendingCourierAssignments[ord]) {
+      delete pendingCourierAssignments[ord];
+      savePendingCourierAssignmentsToSession_();
+    }
+  }
+
+  function getPendingCourierAssignment_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    return ord ? (pendingCourierAssignments[ord] || null) : null;
+  }
+
+  function applyPendingCourierAssignmentsToOrders_(orders){
+    return (orders || []).map(o => {
+      const on = String(o && o.OrderNumber || "").trim();
+      if (!on) return o;
+      const p = getPendingCourierAssignment_(on);
+      if (!p) return o;
+      return Object.assign({}, o, p, {
+        SaveFailed: true
+      });
+    });
+  }
+
+
+  function isReadySaveFailed_(orderNumber){
+    const f = getFailedAction_(orderNumber);
+    return !!(f && (f.type === "READY_SAVE_FAILED" || f.type === "DISPATCH_SAVE_FAILED"));
+  }
+
+
+  function failedReadyOrderFromCache_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return null;
+
+    const cached = detailCache.get(ord);
+    if (cached) {
+      return Object.assign({}, cached, {
+        OrderNumber: ord,
+        WorkflowStatus: "READY",
+        SaveFailed: true,
+        DetailPreloaded: true
+      });
+    }
+
+    return {
+      OrderNumber: ord,
+      CustomerName: "Save failed - open to retry",
+      OrderTotalSRD: 0,
+      WorkflowStatus: "READY",
+      ReadyAt: new Date().toISOString(),
+      SaveFailed: true,
+      DetailPreloaded: false,
+      Items: [],
+      PickChecks: [],
+      PickComplete: true
+    };
+  }
+
+  function failedReadyOrderNumbers_(){
+    return Object.keys(failedActions).filter(on => {
+      const f = failedActions[on];
+      return f && (f.type === "READY_SAVE_FAILED" || f.type === "DISPATCH_SAVE_FAILED");
+    });
+  }
+
   function getListEl_(tab){
     if (tab === "ready") return document.getElementById("listReady");
+    if (tab === "dispatch") return document.getElementById("listDispatch");
     if (tab === "return") return document.getElementById("listReturn");
     if (tab === "handled") return document.getElementById("listHandled");
     return document.getElementById("listPick");
@@ -655,7 +867,7 @@
   }
 
   function updateTabBadge_(tab, count){
-    const id = tab === "ready" ? "badgeReady" : tab === "return" ? "badgeReturn" : tab === "handled" ? "badgeHandled" : "badgePick";
+    const id = tab === "ready" ? "badgeReady" : tab === "dispatch" ? "badgeDispatch" : tab === "return" ? "badgeReturn" : tab === "handled" ? "badgeHandled" : "badgePick";
     const el = document.getElementById(id);
     if (el) el.textContent = String(typeof count === "number" ? count : 0);
   }
@@ -663,6 +875,8 @@
   function updateAllBadges_(){
     TABS.forEach(t => updateTabBadge_(t, Array.isArray(pools[t]) ? pools[t].length : 0));
     updateReadyFilterCounts_();
+    updateDispatchFilterCounts_();
+    renderDispatchCourierFilters_();
   }
 
   function setDebug_(msg){
@@ -681,6 +895,16 @@
     if (currentTab === "ready" && readyFilter !== "all") {
       arr = arr.filter(o => readyAgeBucket_(o) === readyFilter);
     }
+    if (currentTab === "dispatch" && dispatchFilter !== "all") {
+      if (dispatchFilter === "unassigned") {
+        arr = arr.filter(o => !String(o && o.CourierId || "").trim());
+      } else if (dispatchFilter === "assigned") {
+        arr = arr.filter(o => !!String(o && o.CourierId || "").trim());
+      } else if (dispatchFilter.indexOf("courier:") === 0) {
+        const cid = dispatchFilter.substring("courier:".length);
+        arr = arr.filter(o => String(o && o.CourierId || "").trim() === cid);
+      }
+    }
     if (!q) return arr;
     return arr.filter(o => {
       const on = String(o.OrderNumber || "").toLowerCase();
@@ -692,6 +916,7 @@
   function emptyHint_(tab){
     if (tab === "pick") return "📭 Geen orders om te picken.";
     if (tab === "ready") return "✅ Geen ready orders.";
+    if (tab === "dispatch") return "🚚 Geen dispatch orders.";
     if (tab === "return") return "✅ Geen retour orders.";
     return "✅ Geen handled orders.";
   }
@@ -718,12 +943,13 @@
       card.onclick = () => openOrder(o.OrderNumber);
 
       const dateForCard = activeTab === "handled" ? (o.HandledAt || o.ReturnedAt || o.ReturnAt || o.ReadyAt || o.CreatedAt)
-        : activeTab === "return" ? (o.ReturnAt || o.ReadyAt || o.CreatedAt)
+        : activeTab === "return" ? (o.ReturnAt || o.ReadyAt || o.DispatchAt || o.CreatedAt)
+        : activeTab === "dispatch" ? (o.DispatchAt || o.CreatedAt)
         : activeTab === "ready" ? (o.ReadyAt || o.CreatedAt)
         : o.CreatedAt;
 
       const pay = String(o.PaymentStatus || "").trim();
-      const workflowKind = workflow === "PICK" ? "warn" : workflow === "RETURN" ? "warn" : "ok";
+      const workflowKind = workflow === "PICK" ? "warn" : workflow === "RETURN" ? "warn" : workflow === "DISPATCH" ? "warn" : "ok";
 
       card.innerHTML = `
         <div class="cardHead">
@@ -741,6 +967,8 @@
       const pills = document.createElement("div");
       pills.className = "pills";
       pills.appendChild(pill("Workflow: " + displayWorkflow_(workflow), workflowKind));
+      const fulfillmentType = normFulfillmentType_(o.FulfillmentType);
+      pills.appendChild(pill(displayFulfillmentType_(fulfillmentType), fulfillmentType === "DELIVERY" ? "delivery" : "pickup"));
       if (failedAction) {
         pills.appendChild(pill("Save failed", "bad"));
         pills.appendChild(pill("Tap to retry", "bad"));
@@ -754,6 +982,9 @@
         age.textContent = "Waiting: " + readyAgeLabel_(o);
         pills.appendChild(age);
       }
+      if (o.CourierName) pills.appendChild(pill("Courier: " + o.CourierName, "delivery"));
+      if (o.PendingCourierAssignment) pills.appendChild(pill("Courier save failed", "bad"));
+      if (o.DeliveryStatus) pills.appendChild(pill("Delivery: " + o.DeliveryStatus, "warn"));
       if (pay) pills.appendChild(pill("Pay: " + pay, pay === "Paid" ? "ok" : pay === "Unpaid" ? "warn" : ""));
       if (workflow === "READY" && o.ReadyBy) pills.appendChild(pill("Door: " + o.ReadyBy, ""));
       if (workflow === "RETURN" && o.HandledSource) pills.appendChild(pill("Reden: " + o.HandledSource, "warn"));
@@ -789,14 +1020,14 @@
       if (a === "Onbekende datum") return 1;
       if (b === "Onbekende datum") return -1;
       // Ready tab: oldest date first. Others: newest date first.
-      if (activeTab === "ready" || activeTab === "return") return (a > b) ? 1 : (a < b ? -1 : 0);
+      if (activeTab === "ready" || activeTab === "dispatch" || activeTab === "return") return (a > b) ? 1 : (a < b ? -1 : 0);
       return (a < b) ? 1 : (a > b ? -1 : 0);
     });
 
     keys.forEach(k => {
       const arr = groups.get(k) || [];
       arr.sort((a,b) => {
-        if (activeTab === "ready" || activeTab === "return") return msForTab_(a, activeTab) - msForTab_(b, activeTab);
+        if (activeTab === "ready" || activeTab === "dispatch" || activeTab === "return") return msForTab_(a, activeTab) - msForTab_(b, activeTab);
         return msForTab_(b, activeTab) - msForTab_(a, activeTab);
       });
 
@@ -841,7 +1072,7 @@
   function renderCurrent_(){
     const tab = currentTab;
     showTabContainers_(tab);
-    const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + (tab === "ready" ? readyFilter : "") + "|" + String(versions[tab]);
+    const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + (tab === "ready" ? readyFilter : "") + "|" + (tab === "dispatch" ? dispatchFilter : "") + "|" + String(versions[tab]);
     const listEl = getListEl_(tab);
     if (listEl && renderSigByTab[tab] === sig && listEl.dataset.rendered === "1") return;
 
@@ -851,6 +1082,11 @@
     renderSigByTab[tab] = sig;
 
     if (tab === "ready") updateReadyFilterCounts_();
+    if (tab === "dispatch") {
+      updateDispatchFilterCounts_();
+      renderDispatchCourierFilters_();
+      syncDispatchFilterActiveButtons_();
+    }
     setDebug_(`tab=${tab} • total=${orders.length} • q="${searchQuery}"`);
   }
 
@@ -861,7 +1097,42 @@
     loading[tab] = (async () => {
       const res = await api(ACTION_BY_TAB[tab]);
       if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + ACTION_BY_TAB[tab] + ")");
-      pools[tab] = sortNewestFirst_(res.orders || [], tab);
+      let incoming = sortNewestFirst_(applyPendingCourierAssignmentsToOrders_(res.orders || []), tab);
+
+      // Failed READY saves must stay visually in Ready after refresh, even if sheet still says PICK.
+      const failedReady = {};
+      failedReadyOrderNumbers_().forEach(on => { failedReady[on] = true; });
+
+      if (tab === "pick") {
+        incoming = incoming.filter(o => !failedReady[String(o && o.OrderNumber || "").trim()]);
+      }
+
+      if (tab === "ready") {
+        const incomingKeys = {};
+        incoming.forEach(o => { incomingKeys[String(o && o.OrderNumber || "").trim()] = true; });
+
+        // Preserve live local ready failed orders.
+        (pools.ready || []).forEach(localOrder => {
+          const on = String(localOrder && localOrder.OrderNumber || "").trim();
+          if (on && failedReady[on] && !incomingKeys[on]) {
+            incoming.unshift(localOrder);
+            incomingKeys[on] = true;
+          }
+        });
+
+        // Also restore failed ready orders from session/detail cache after page refresh.
+        failedReadyOrderNumbers_().forEach(on => {
+          if (!incomingKeys[on]) {
+            const restored = failedReadyOrderFromCache_(on);
+            if (restored) {
+              incoming.unshift(restored);
+              incomingKeys[on] = true;
+            }
+          }
+        });
+      }
+
+      pools[tab] = sortNewestFirst_(incoming, tab);
       seedDetailCacheFromList_(pools[tab]);
       cachesLoaded[tab] = true;
       dirty[tab] = false;
@@ -869,6 +1140,11 @@
       renderSigByTab[tab] = null;
       updateTabBadge_(tab, pools[tab].length);
       if (tab === "ready") updateReadyFilterCounts_();
+      if (tab === "dispatch") {
+        updateDispatchFilterCounts_();
+        renderDispatchCourierFilters_();
+        syncDispatchFilterActiveButtons_();
+      }
     })();
 
     try { await loading[tab]; }
@@ -899,6 +1175,7 @@
       await Promise.all([
         ensureTabData_("pick", force),
         ensureTabData_("ready", force),
+        ensureTabData_("dispatch", force),
         ensureTabData_("return", force)
       ]);
 
@@ -930,13 +1207,21 @@
 
     document.getElementById("tabPick").classList.toggle("active", currentTab === "pick");
     document.getElementById("tabReady").classList.toggle("active", currentTab === "ready");
+    document.getElementById("tabDispatch").classList.toggle("active", currentTab === "dispatch");
     document.getElementById("tabReturn").classList.toggle("active", currentTab === "return");
     document.getElementById("tabHandled").classList.toggle("active", currentTab === "handled");
 
     showTabContainers_(currentTab);
     const rf = document.getElementById("readyFilters");
     if (rf) rf.style.display = currentTab === "ready" ? "flex" : "none";
+    const df = document.getElementById("dispatchFilters");
+    if (df) df.style.display = currentTab === "dispatch" ? "flex" : "none";
     if (currentTab === "ready") updateReadyFilterCounts_();
+    if (currentTab === "dispatch") {
+      updateDispatchFilterCounts_();
+      renderDispatchCourierFilters_();
+      syncDispatchFilterActiveButtons_();
+    }
     if (cachesLoaded[currentTab]) renderCurrent_();
   }
 
@@ -956,7 +1241,7 @@
   }
 
   async function quietRefreshTab_(tab){
-    if (!["pick","ready","return"].includes(tab)) return;
+    if (!["pick","ready","dispatch","return"].includes(tab)) return;
     if (loading[tab]) return loading[tab];
 
     loading[tab] = (async () => {
@@ -964,7 +1249,42 @@
       const res = await api(action);
       if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + action + ")");
 
-      pools[tab] = sortNewestFirst_(res.orders || [], tab);
+      let incoming = sortNewestFirst_(applyPendingCourierAssignmentsToOrders_(res.orders || []), tab);
+
+      // Failed READY saves must stay visually in Ready after refresh, even if sheet still says PICK.
+      const failedReady = {};
+      failedReadyOrderNumbers_().forEach(on => { failedReady[on] = true; });
+
+      if (tab === "pick") {
+        incoming = incoming.filter(o => !failedReady[String(o && o.OrderNumber || "").trim()]);
+      }
+
+      if (tab === "ready") {
+        const incomingKeys = {};
+        incoming.forEach(o => { incomingKeys[String(o && o.OrderNumber || "").trim()] = true; });
+
+        // Preserve live local ready failed orders.
+        (pools.ready || []).forEach(localOrder => {
+          const on = String(localOrder && localOrder.OrderNumber || "").trim();
+          if (on && failedReady[on] && !incomingKeys[on]) {
+            incoming.unshift(localOrder);
+            incomingKeys[on] = true;
+          }
+        });
+
+        // Also restore failed ready orders from session/detail cache after page refresh.
+        failedReadyOrderNumbers_().forEach(on => {
+          if (!incomingKeys[on]) {
+            const restored = failedReadyOrderFromCache_(on);
+            if (restored) {
+              incoming.unshift(restored);
+              incomingKeys[on] = true;
+            }
+          }
+        });
+      }
+
+      pools[tab] = sortNewestFirst_(incoming, tab);
       seedDetailCacheFromList_(pools[tab]);
       cachesLoaded[tab] = true;
       dirty[tab] = false;
@@ -973,6 +1293,11 @@
 
       updateTabBadge_(tab, pools[tab].length);
       if (tab === "ready") updateReadyFilterCounts_();
+      if (tab === "dispatch") {
+        updateDispatchFilterCounts_();
+        renderDispatchCourierFilters_();
+        syncDispatchFilterActiveButtons_();
+      }
 
       const modalOpen = document.getElementById("orderModal") && document.getElementById("orderModal").classList.contains("show");
       if (tab === currentTab && !modalOpen) renderCurrent_();
@@ -991,6 +1316,7 @@
       await Promise.all([
         quietRefreshTab_("pick").catch(()=>{}),
         quietRefreshTab_("ready").catch(()=>{}),
+        quietRefreshTab_("dispatch").catch(()=>{}),
         quietRefreshTab_("return").catch(()=>{})
       ]);
       setDebug_("background sync ok • " + new Date().toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit", second:"2-digit" }));
@@ -1071,11 +1397,330 @@
     updateOrderActionsUI_();
   }
 
+
+  async function loadCouriers_(){
+    try{
+      const res = await api("getCouriers");
+      couriers = (res && res.ok && Array.isArray(res.couriers)) ? res.couriers : [];
+      renderDispatchCourierFilters_();
+      syncDispatchFilterActiveButtons_();
+    }catch(e){
+      couriers = [];
+    }
+  }
+
+  function populateCourierSelect_(selectedId){
+    const sel = document.getElementById("courierSelect");
+    if (!sel) return;
+
+    const selected = String(selectedId || "").trim();
+    sel.innerHTML = "";
+
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = couriers.length ? "Select courier…" : "No active couriers";
+    sel.appendChild(empty);
+
+    couriers.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.CourierId || "";
+      opt.textContent = c.Name || c.CourierId || "";
+      if (String(opt.value) === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function assignCourierForCurrentOrder_(){
+    if (!currentOrder) throw new Error("No order selected");
+
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    if (!orderNumber) throw new Error("Missing OrderNumber");
+
+    const sel = document.getElementById("courierSelect");
+    const courierId = sel ? String(sel.value || "").trim() : "";
+    if (!courierId) throw new Error("Select courier first");
+
+    const courier = couriers.find(c => String(c.CourierId || "").trim() === courierId);
+    if (!courier) throw new Error("Selected courier not found or inactive");
+
+    const resEl = document.getElementById("odActionResult");
+    if (resEl) resEl.textContent = "Assigning courier…";
+
+    const patch = {
+      CourierId: courier.CourierId,
+      CourierName: courier.Name,
+      CourierPhone: courier.Phone || "",
+      DeliveryStatus: "DISPATCHED_TO_COURIER",
+      DispatchedAt: new Date().toISOString(),
+      DispatchedBy: "PickQueue",
+      PendingCourierAssignment: true
+    };
+
+    // Operational truth: keep courier assignment visible even if API fails.
+    setPendingCourierAssignment_(orderNumber, patch);
+    markFailedAction_(orderNumber, "COURIER_ASSIGN_PENDING", "Courier assignment pending save");
+
+    Object.assign(currentOrder, patch);
+    updateOrderInCaches_(orderNumber, Object.assign({}, patch, { SaveFailed: false }));
+    setCachedOrderDetail_(currentOrder);
+    renderCurrent_();
+    applyOrderToModal_(currentOrder);
+
+    api("assignCourier", {
+      orderNumber,
+      courierId,
+      source: "PickQueue"
+    }).then(res => {
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to assign courier");
+
+      const finalPatch = {
+        CourierId: res.CourierId || courier.CourierId,
+        CourierName: res.CourierName || courier.Name,
+        CourierPhone: res.CourierPhone || courier.Phone || "",
+        DeliveryStatus: res.DeliveryStatus || "DISPATCHED_TO_COURIER",
+        DispatchedAt: res.DispatchedAt || patch.DispatchedAt,
+        DispatchedBy: res.DispatchedBy || "PickQueue",
+        PendingCourierAssignment: false,
+        SaveFailed: false
+      };
+
+      clearPendingCourierAssignment_(orderNumber);
+      clearFailedAction_(orderNumber);
+
+      Object.assign(currentOrder, finalPatch);
+      updateOrderInCaches_(orderNumber, finalPatch);
+      setCachedOrderDetail_(currentOrder);
+
+      if (resEl) resEl.textContent = "Courier assigned: " + finalPatch.CourierName;
+      renderCurrent_();
+      applyOrderToModal_(currentOrder);
+
+    }).catch(e => {
+      const failedPatch = Object.assign({}, patch, {
+        PendingCourierAssignment: true,
+        SaveFailed: true
+      });
+
+      setPendingCourierAssignment_(orderNumber, failedPatch);
+      markFailedAction_(orderNumber, "COURIER_ASSIGN_FAILED", e.message || String(e));
+
+      Object.assign(currentOrder, failedPatch);
+      updateOrderInCaches_(orderNumber, failedPatch);
+      setCachedOrderDetail_(currentOrder);
+
+      if (resEl) resEl.textContent = "❌ Courier assignment failed to save. The assignment stays visible. Press Retry Courier Save.";
+      renderCurrent_();
+      applyOrderToModal_(currentOrder);
+    });
+  }
+
+  async function unassignCourierForCurrentOrder_(){
+    if (!currentOrder) throw new Error("No order selected");
+
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    if (!orderNumber) throw new Error("Missing OrderNumber");
+
+    const hadCourierName = currentOrder.CourierName || "";
+
+    const patch = {
+      CourierId: "",
+      CourierName: "",
+      CourierPhone: "",
+      DeliveryStatus: "AWAITING_COURIER_ASSIGNMENT",
+      DispatchedAt: "",
+      DispatchedBy: "PickQueue",
+      PendingCourierAssignment: false,
+      SaveFailed: false
+    };
+
+    // Operational truth: visually unassign immediately, then save in background.
+    clearPendingCourierAssignment_(orderNumber);
+    clearFailedAction_(orderNumber);
+
+    Object.assign(currentOrder, patch);
+    updateOrderInCaches_(orderNumber, patch);
+    setCachedOrderDetail_(currentOrder);
+    renderCurrent_();
+    applyOrderToModal_(currentOrder);
+
+    const resEl = document.getElementById("odActionResult");
+    if (resEl) resEl.textContent = hadCourierName ? ("Courier unassigned: " + hadCourierName) : "Courier unassigned";
+
+    api("unassignCourier", {
+      orderNumber,
+      source: "PickQueue"
+    }).then(res => {
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to unassign courier");
+
+      const finalPatch = {
+        CourierId: "",
+        CourierName: "",
+        CourierPhone: "",
+        DeliveryStatus: res.DeliveryStatus || "AWAITING_COURIER_ASSIGNMENT",
+        DispatchedAt: "",
+        DispatchedBy: res.DispatchedBy || "PickQueue",
+        PendingCourierAssignment: false,
+        SaveFailed: false
+      };
+
+      clearPendingCourierAssignment_(orderNumber);
+      clearFailedAction_(orderNumber);
+
+      Object.assign(currentOrder, finalPatch);
+      updateOrderInCaches_(orderNumber, finalPatch);
+      setCachedOrderDetail_(currentOrder);
+      if (resEl) resEl.textContent = "Courier unassigned";
+      renderCurrent_();
+      applyOrderToModal_(currentOrder);
+
+    }).catch(e => {
+      // Since unassign failed, keep local unassigned state visible, but warn staff.
+      markFailedAction_(orderNumber, "COURIER_UNASSIGN_FAILED", e.message || String(e));
+      updateOrderInCaches_(orderNumber, { SaveFailed: true });
+      setCachedOrderDetail_(currentOrder);
+      if (resEl) resEl.textContent = "❌ Unassign failed to save. The order is shown as unassigned locally. Refresh/retry if needed.";
+      renderCurrent_();
+      applyOrderToModal_(currentOrder);
+    });
+  }
+
+
+  function textForPrint_(v){
+    return String(v === null || v === undefined ? "" : v);
+  }
+
+  function escPrint_(s){
+    return textForPrint_(s).replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function buildPrintLabelHtml_(o){
+    o = o || {};
+    var items = Array.isArray(o.Items) ? o.Items : [];
+    var fulfillment = displayFulfillmentType_(o.FulfillmentType);
+    var workflow = displayWorkflow_(o.WorkflowStatus);
+    var courier = textForPrint_(o.CourierName).trim();
+    var phone = textForPrint_(o.CustomerPhone).trim();
+    var total = formatSRD(o.OrderTotalSRD);
+    var shippingMethod = textForPrint_(o.ShippingMethod).trim();
+    var printedAt = new Date().toLocaleString("nl-NL", { timeZone:"America/Paramaribo" });
+
+    var itemHtml = "";
+    if (!items.length) {
+      itemHtml = '<div>No items</div>';
+    } else {
+      items.forEach(function(it){
+        var qty = Number((it && it.qty) || 1);
+        var name = escPrint((it && it.name) || "");
+        var opts = formatOptions(it && it.options);
+        var cls = qty > 1 ? "lineItem multi" : "lineItem";
+        itemHtml += '<div class="' + cls + '">';
+        itemHtml += '<div><strong>' + escPrint(qty) + 'x</strong> ' + name + '</div>';
+        if (opts) itemHtml += '<div class="opts">' + escPrint(opts) + '</div>';
+        itemHtml += '</div>';
+      });
+    }
+
+    var htmlParts = [];
+    htmlParts.push('<!doctype html><html><head><meta charset="utf-8">');
+    htmlParts.push('<title>Label ' + escPrint(o.OrderNumber || "") + '</title>');
+    htmlParts.push('<style>');
+    htmlParts.push('@page{size:80mm auto;margin:3mm;}');
+    htmlParts.push('*{box-sizing:border-box;}');
+    htmlParts.push('body{margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.25;color:#000;background:#fff;}');
+    htmlParts.push('.label{width:74mm;padding:0;}');
+    htmlParts.push('.center{text-align:center;}');
+    htmlParts.push('.brand{font-size:15px;font-weight:900;letter-spacing:.4px;margin-bottom:3px;}');
+    htmlParts.push('.ord{font-size:22px;font-weight:900;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:6px 0;margin:5px 0 6px;text-align:center;}');
+    htmlParts.push('.pill{display:inline-block;border:1px solid #000;border-radius:999px;padding:2px 6px;margin:1px 2px 2px 0;font-size:11px;font-weight:900;}');
+    htmlParts.push('.section{border-top:1px dashed #000;padding-top:5px;margin-top:6px;}');
+    htmlParts.push('.row{display:flex;justify-content:space-between;gap:6px;margin:2px 0;}');
+    htmlParts.push('.k{font-weight:900;}');
+    htmlParts.push('.v{text-align:right;word-break:break-word;}');
+    htmlParts.push('.left .v{text-align:left;}');
+    htmlParts.push('.lineItem{padding:4px 0;border-bottom:1px dotted #999;}');
+    htmlParts.push('.lineItem.multi{border:2px solid #000;padding:5px;margin:4px 0;font-size:14px;font-weight:900;}');
+    htmlParts.push('.opts{font-size:11px;margin-left:14px;}');
+    htmlParts.push('.footer{margin-top:7px;border-top:1px dashed #000;padding-top:5px;text-align:center;font-size:10px;}');
+    htmlParts.push('.amount{font-size:16px;font-weight:900;}');
+    htmlParts.push('@media print{.noPrint{display:none!important;}body{width:74mm;}}');
+    htmlParts.push('</style></head><body>');
+    htmlParts.push('<div class="label">');
+    htmlParts.push('<div class="center brand">PICK / DELIVERY LABEL</div>');
+    htmlParts.push('<div class="ord">' + escPrint(o.OrderNumber || "") + '</div>');
+    htmlParts.push('<div class="center">');
+    htmlParts.push('<span class="pill">' + escPrint(fulfillment) + '</span>');
+    htmlParts.push('<span class="pill">' + escPrint(workflow) + '</span>');
+    if (courier) htmlParts.push('<span class="pill">Courier: ' + escPrint(courier) + '</span>');
+    htmlParts.push('</div>');
+    htmlParts.push('<div class="section left">');
+    htmlParts.push('<div class="row"><div class="k">Customer</div><div class="v">' + escPrint(o.CustomerName || "") + '</div></div>');
+    htmlParts.push('<div class="row"><div class="k">Phone</div><div class="v">' + escPrint(phone) + '</div></div>');
+    if (shippingMethod) htmlParts.push('<div class="row"><div class="k">Method</div><div class="v">' + escPrint(shippingMethod) + '</div></div>');
+    if (o.DeliveryStatus) htmlParts.push('<div class="row"><div class="k">Delivery</div><div class="v">' + escPrint(o.DeliveryStatus) + '</div></div>');
+    htmlParts.push('</div>');
+    htmlParts.push('<div class="section"><div class="row"><div class="k">Total</div><div class="v amount">' + escPrint(total) + '</div></div></div>');
+    htmlParts.push('<div class="section"><div class="k">Items</div>' + itemHtml + '</div>');
+    htmlParts.push('<div class="footer">Printed: ' + escPrint(printedAt) + '</div>');
+    htmlParts.push('<div class="noPrint" style="margin-top:10px;text-align:center;">');
+    htmlParts.push('<button onclick="window.print()" style="font-size:14px;padding:8px 12px;">Print</button> ');
+    htmlParts.push('<button onclick="window.close()" style="font-size:14px;padding:8px 12px;">Close</button>');
+    htmlParts.push('</div></div>');
+    htmlParts.push('<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},350);});<\/script>');
+    htmlParts.push('</body></html>');
+    return htmlParts.join('');
+  }
+
+  async function printCurrentOrderLabel_(){
+    if (!currentOrder) throw new Error("No order selected");
+
+    var orderNumber = String(currentOrder.OrderNumber || "").trim();
+    var orderToPrint = currentOrder;
+
+    try{
+      var fresh = await prefetchOrderDetail_(orderNumber, true);
+      if (fresh) {
+        currentOrder = fresh;
+        initPickState_(fresh);
+        applyOrderToModal_(fresh);
+        orderToPrint = fresh;
+      }
+    }catch(e){
+      // Print with cached/current data if refresh fails.
+    }
+
+    var labelHtml = buildPrintLabelHtml_(orderToPrint);
+
+    // Use a Blob URL instead of document.write. This is more reliable across browsers
+    // and avoids blank popups caused by document stream timing.
+    var blob = new Blob([labelHtml], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var w = window.open(url, "_blank", "width=420,height=720");
+
+    if (!w) {
+      URL.revokeObjectURL(url);
+      throw new Error("Popup blocked. Allow popups for this page to print labels.");
+    }
+
+    // Revoke later; immediate revoke can blank the new window in some browsers.
+    setTimeout(function(){
+      try { URL.revokeObjectURL(url); } catch(e){}
+    }, 60000);
+  }
+
   function updateOrderActionsUI_(){
     const hint = document.getElementById("odStatusHint");
     const btn = document.getElementById("btnMarkReady");
+    const courierSelect = document.getElementById("courierSelect");
+    const btnAssignCourier = document.getElementById("btnAssignCourier");
+    const btnUnassignCourier = document.getElementById("btnUnassignCourier");
     const sec = document.getElementById("odActionsSec");
     if (!hint || !btn || !sec) return;
+
+    if (courierSelect) courierSelect.style.display = "none";
+    if (btnAssignCourier) btnAssignCourier.style.display = "none";
+    if (btnUnassignCourier) btnUnassignCourier.style.display = "none";
 
     if (!currentOrder) {
       hint.textContent = "—";
@@ -1091,8 +1736,30 @@
 
     if (workflow === "PICK") {
       sec.style.display = "block";
-      btn.textContent = "Markeer als Ready";
+      btn.textContent = normFulfillmentType_(currentOrder.FulfillmentType) === "DELIVERY" ? "Markeer als Dispatch" : "Markeer als Ready";
       btn.disabled = !pickComplete;
+    } else if (workflow === "READY" && isReadySaveFailed_(currentOrder.OrderNumber)) {
+      sec.style.display = "block";
+      btn.textContent = "Retry Ready save";
+      btn.disabled = !pickComplete;
+    } else if (workflow === "DISPATCH") {
+      sec.style.display = "block";
+      btn.textContent = "Al Dispatch";
+      btn.disabled = true;
+      if (courierSelect) {
+        courierSelect.style.display = "inline-block";
+        populateCourierSelect_(currentOrder.CourierId || "");
+      }
+      if (btnAssignCourier) {
+        btnAssignCourier.style.display = "inline-block";
+        btnAssignCourier.textContent = getFailedAction_(currentOrder.OrderNumber) && getFailedAction_(currentOrder.OrderNumber).type === "COURIER_ASSIGN_FAILED"
+          ? "Retry Courier Save"
+          : currentOrder.CourierId ? "Reassign Courier" : "Assign Courier";
+      }
+      if (btnUnassignCourier && currentOrder.CourierId) {
+        btnUnassignCourier.style.display = "inline-block";
+        btnUnassignCourier.textContent = "Unassign Courier";
+      }
     } else if (workflow === "RETURN") {
       sec.style.display = "block";
       btn.textContent = "Terug naar warehouse bevestigd";
@@ -1119,7 +1786,10 @@
         currentOrder = cached;
         initPickState_(currentOrder);
         applyOrderToModal_(currentOrder);
-        prefetchOrderDetail_(orderNumber, false).then(fresh => {
+
+        // Always refresh opened order from server. This prevents stale cached PICK details
+        // from hiding DISPATCH courier controls after a delivery order was routed.
+        prefetchOrderDetail_(orderNumber, true).then(fresh => {
           if (fresh && currentOrder && currentOrder.OrderNumber === fresh.OrderNumber) {
             currentOrder = fresh;
             initPickState_(fresh);
@@ -1129,7 +1799,7 @@
         return;
       }
 
-      const fresh = await prefetchOrderDetail_(orderNumber, false);
+      const fresh = await prefetchOrderDetail_(orderNumber, true);
       if (!fresh) throw new Error("Order not found");
       currentOrder = fresh;
       initPickState_(currentOrder);
@@ -1146,7 +1816,35 @@
     updatePickUI_();
   }
 
+
+  function getListOrderSnapshot_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return null;
+    for (const t of TABS) {
+      const found = (pools[t] || []).find(o => String(o && o.OrderNumber || "").trim() === ord);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function mergeLatestListSnapshot_(orderObj){
+    if (!orderObj) return orderObj;
+    const pendingCourier = getPendingCourierAssignment_(orderObj.OrderNumber);
+    if (pendingCourier) orderObj = Object.assign({}, orderObj, pendingCourier, { SaveFailed: true });
+    const snap = getListOrderSnapshot_(orderObj.OrderNumber);
+    if (!snap) return orderObj;
+
+    // Prefer list workflow when it has moved forward from cached PICK.
+    if (normWorkflow_(snap.WorkflowStatus) !== "PICK" || normWorkflow_(orderObj.WorkflowStatus) === "PICK") {
+      return Object.assign({}, orderObj, snap);
+    }
+    return Object.assign({}, snap, orderObj);
+  }
+
+
   function applyOrderToModal_(o){
+    o = mergeLatestListSnapshot_(o);
+    currentOrder = o;
     const kv = document.getElementById("odKV");
     kv.innerHTML = "";
 
@@ -1158,7 +1856,11 @@
       const b = document.createElement("div");
       b.style.color = "#b91c1c";
       b.style.fontWeight = "900";
-      b.textContent = "⚠️ Save failed. Please verify items and try Markeer als Ready again.";
+      b.textContent = failedAction && failedAction.type === "COURIER_ASSIGN_FAILED"
+        ? "⚠️ Courier assignment failed to save. Verify courier and press Retry Courier Save."
+        : failedAction && failedAction.type === "COURIER_UNASSIGN_FAILED"
+          ? "⚠️ Courier unassign failed to save. Verify in sheet and retry if needed."
+          : "⚠️ Save failed. Please verify items and try again.";
       kv.appendChild(a);
       kv.appendChild(b);
     }
@@ -1169,7 +1871,13 @@
     addKV(kv, "Email", o.CustomerEmail);
     addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
     addKV(kv, "Workflow", displayWorkflow_(o.WorkflowStatus));
+    addKV(kv, "Fulfillment", displayFulfillmentType_(o.FulfillmentType));
+    addKV(kv, "Shipping Method", o.ShippingMethod || "");
     addKV(kv, "ReadyAt", formatDateDisplay_(o.ReadyAt || ""));
+    addKV(kv, "DispatchAt", formatDateDisplay_(o.DispatchAt || ""));
+    addKV(kv, "Courier", o.CourierName || "");
+    addKV(kv, "DeliveryStatus", o.DeliveryStatus || "");
+    addKV(kv, "DispatchedAt", formatDateDisplay_(o.DispatchedAt || ""));
     addKV(kv, "ReturnAt", formatDateDisplay_(o.ReturnAt || ""));
     addKV(kv, "ReturnedAt", formatDateDisplay_(o.ReturnedAt || ""));
     addKV(kv, "HandledAt", formatDateDisplay_(o.HandledAt || ""));
@@ -1295,71 +2003,70 @@
 
     const modal = document.getElementById("orderModal");
     const resEl = document.getElementById("odActionResult");
-
-    // Snapshot for rollback only if API fails.
-    const previous = JSON.parse(JSON.stringify(pools));
-    const previousOrder = JSON.parse(JSON.stringify(currentOrder || {}));
-    const previousTab = currentTab;
     const now = new Date().toISOString();
+    const startedFromWorkflow = normWorkflow_(currentOrder.WorkflowStatus);
+    const fulfillmentType = normFulfillmentType_(currentOrder.FulfillmentType);
+    const targetWorkflow = fulfillmentType === "DELIVERY" ? "DISPATCH" : "READY";
+    const targetTab = targetWorkflow === "DISPATCH" ? "dispatch" : "ready";
 
-    // Instant UI: close modal and move the card immediately.
-    currentOrder.WorkflowStatus = "READY";
-    currentOrder.ReadyAt = now;
+    currentOrder.WorkflowStatus = targetWorkflow;
     currentOrder.PickComplete = true;
     currentOrder.PickChecks = pickChecks;
+    if (targetWorkflow === "READY") currentOrder.ReadyAt = now;
+    if (targetWorkflow === "DISPATCH") currentOrder.DispatchAt = now;
 
+    clearFailedAction_(orderNumber);
     setCachedOrderDetail_(currentOrder);
 
     if (modal) modal.classList.remove("show");
     if (resEl) resEl.textContent = "";
 
-    moveOrderBetweenPools_(orderNumber, "ready", {
-      WorkflowStatus: "READY",
-      ReadyAt: now,
-      PickComplete: true,
-      DetailPreloaded: true
-    });
+    const patch = { WorkflowStatus: targetWorkflow, PickComplete: true, PickChecks: pickChecks, DetailPreloaded: true };
+    if (targetWorkflow === "READY") patch.ReadyAt = now;
+    if (targetWorkflow === "DISPATCH") patch.DispatchAt = now;
 
-    // Keep user on Pick tab; card disappears immediately.
+    moveOrderBetweenPools_(orderNumber, targetTab, patch);
+
+    if (startedFromWorkflow === "PICK") currentTab = "pick";
     renderCurrent_();
+    backgroundRefreshCounts_();
 
-    // Background save. Save checkmarks once, then move workflow to READY.
-    api("setPickChecks", {
+    api("markPickedComplete", {
       orderNumber,
-      checks: JSON.stringify(pickChecks)
+      checks: JSON.stringify(pickChecks),
+      source: "PickQueue"
     }).then(res => {
-      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save pick checks");
-
-      return api("setWorkflowStatus", {
-        orderNumber,
-        workflowStatus: "READY",
-        source: "PickQueue"
-      });
-    }).then(res => {
-      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to set workflow status");
-
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to complete pick");
       clearFailedAction_(orderNumber);
       dirty.pick = false;
-      dirty.ready = false;
+      dirty[targetTab] = false;
       backgroundRefreshCounts_();
-
     }).catch(e => {
-      // Roll back if save failed.
-      TABS.forEach(t => {
-        pools[t] = previous[t] || [];
-        versions[t]++;
-        renderSigByTab[t] = null;
-      });
+      const failType = targetWorkflow === "DISPATCH" ? "DISPATCH_SAVE_FAILED" : "READY_SAVE_FAILED";
+      markFailedAction_(orderNumber, failType, e.message || String(e));
+      updateOrderInCaches_(orderNumber, Object.assign({}, patch, { SaveFailed: true }));
+      const cached = detailCache.get(orderNumber) || currentOrder || {};
+      detailCache.set(orderNumber, Object.assign({}, cached, patch));
+      saveDetailCacheToSession_();
 
-      currentOrder = previousOrder;
-      markFailedAction_(orderNumber, "READY_SAVE_FAILED", e.message || String(e));
-      updateOrderInCaches_(orderNumber, { SaveFailed: true });
+      renderSigByTab[targetTab] = null;
+      renderSigByTab.pick = null;
       updateAllBadges_();
 
-      if (previousTab) currentTab = previousTab;
-      renderCurrent_();
+      currentTab = targetTab;
+      showTabContainers_(targetTab);
+      document.getElementById("tabPick").classList.toggle("active", false);
+      document.getElementById("tabReady").classList.toggle("active", targetTab === "ready");
+      document.getElementById("tabDispatch").classList.toggle("active", targetTab === "dispatch");
+      document.getElementById("tabReturn").classList.toggle("active", false);
+      document.getElementById("tabHandled").classList.toggle("active", false);
+      const rf = document.getElementById("readyFilters");
+      if (rf) rf.style.display = targetTab === "ready" ? "flex" : "none";
+      const df = document.getElementById("dispatchFilters");
+      if (df) df.style.display = targetTab === "dispatch" ? "flex" : "none";
 
-      alert("Ready opslaan mislukt. De order staat terug in Pick met een rode waarschuwing.");
+      renderCurrent_();
+      alert((targetWorkflow === "DISPATCH" ? "Dispatch" : "Ready") + " opslaan mislukt. De order blijft in " + (targetWorkflow === "DISPATCH" ? "Dispatch" : "Ready") + " met een rode waarschuwing. Tik de order om opnieuw te proberen.");
     });
   }
 
@@ -1582,6 +2289,7 @@
 
   document.getElementById("tabPick").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("pick"); });
   document.getElementById("tabReady").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("ready"); });
+  document.getElementById("tabDispatch").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("dispatch"); });
   document.getElementById("tabReturn").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("return"); });
   document.getElementById("tabHandled").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("handled"); });
 
@@ -1596,9 +2304,55 @@
     });
   });
 
+
+  const dispatchFiltersEl = document.getElementById("dispatchFilters");
+  if (dispatchFiltersEl) {
+    dispatchFiltersEl.addEventListener("click", ev => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest("[data-dispatch-filter]") : null;
+      if (!btn || !dispatchFiltersEl.contains(btn)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      dispatchFilter = btn.getAttribute("data-dispatch-filter") || "all";
+      syncDispatchFilterActiveButtons_();
+      renderSigByTab.dispatch = null;
+      renderCurrent_();
+    });
+  }
+
   document.getElementById("btnRefresh").onclick = async () => {
     dirty[currentTab] = true;
     await safeLoadOrders(true);
+  };
+
+  document.getElementById("btnUnassignCourier").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{
+      if (resEl) resEl.textContent = "";
+      await unassignCourierForCurrentOrder_();
+    }catch(e){
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+    }
+  };
+
+  document.getElementById("btnAssignCourier").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{
+      if (resEl) resEl.textContent = "";
+      await assignCourierForCurrentOrder_();
+    }catch(e){
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+    }
+  };
+
+  document.getElementById("btnPrintOrderLabel").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{
+      if (resEl) resEl.textContent = "";
+      await printCurrentOrderLabel_();
+    }catch(e){
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+    }
   };
 
   document.getElementById("btnMarkReady").onclick = async () => {
@@ -1615,6 +2369,8 @@
 
   (async function init(){
     loadDetailCacheFromSession_();
+    loadFailedActionsFromSession_();
+    loadPendingCourierAssignmentsFromSession_();
 
     const sb = document.getElementById("searchBox");
     if (sb) {
@@ -1625,6 +2381,7 @@
     }
 
     await loadBuildInfo();
+    await loadCouriers_();
     await safeLoadOrders(true);
     startBackgroundSync_();
 
