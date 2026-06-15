@@ -1612,19 +1612,19 @@
     } else {
       items.forEach(function(it){
         var qty = Number((it && it.qty) || 1);
-        var name = escPrint((it && it.name) || "");
+        var name = escPrint_((it && it.name) || "");
         var opts = formatOptions(it && it.options);
         var cls = qty > 1 ? "lineItem multi" : "lineItem";
         itemHtml += '<div class="' + cls + '">';
-        itemHtml += '<div><strong>' + escPrint(qty) + 'x</strong> ' + name + '</div>';
-        if (opts) itemHtml += '<div class="opts">' + escPrint(opts) + '</div>';
+        itemHtml += '<div><strong>' + escPrint_(qty) + 'x</strong> ' + name + '</div>';
+        if (opts) itemHtml += '<div class="opts">' + escPrint_(opts) + '</div>';
         itemHtml += '</div>';
       });
     }
 
     var htmlParts = [];
     htmlParts.push('<!doctype html><html><head><meta charset="utf-8">');
-    htmlParts.push('<title>Label ' + escPrint(o.OrderNumber || "") + '</title>');
+    htmlParts.push('<title>Label ' + escPrint_(o.OrderNumber || "") + '</title>');
     htmlParts.push('<style>');
     htmlParts.push('@page{size:80mm auto;margin:3mm;}');
     htmlParts.push('*{box-sizing:border-box;}');
@@ -1648,21 +1648,21 @@
     htmlParts.push('</style></head><body>');
     htmlParts.push('<div class="label">');
     htmlParts.push('<div class="center brand">PICK / DELIVERY LABEL</div>');
-    htmlParts.push('<div class="ord">' + escPrint(o.OrderNumber || "") + '</div>');
+    htmlParts.push('<div class="ord">' + escPrint_(o.OrderNumber || "") + '</div>');
     htmlParts.push('<div class="center">');
-    htmlParts.push('<span class="pill">' + escPrint(fulfillment) + '</span>');
-    htmlParts.push('<span class="pill">' + escPrint(workflow) + '</span>');
-    if (courier) htmlParts.push('<span class="pill">Courier: ' + escPrint(courier) + '</span>');
+    htmlParts.push('<span class="pill">' + escPrint_(fulfillment) + '</span>');
+    htmlParts.push('<span class="pill">' + escPrint_(workflow) + '</span>');
+    if (courier) htmlParts.push('<span class="pill">Courier: ' + escPrint_(courier) + '</span>');
     htmlParts.push('</div>');
     htmlParts.push('<div class="section left">');
-    htmlParts.push('<div class="row"><div class="k">Customer</div><div class="v">' + escPrint(o.CustomerName || "") + '</div></div>');
-    htmlParts.push('<div class="row"><div class="k">Phone</div><div class="v">' + escPrint(phone) + '</div></div>');
-    if (shippingMethod) htmlParts.push('<div class="row"><div class="k">Method</div><div class="v">' + escPrint(shippingMethod) + '</div></div>');
-    if (o.DeliveryStatus) htmlParts.push('<div class="row"><div class="k">Delivery</div><div class="v">' + escPrint(o.DeliveryStatus) + '</div></div>');
+    htmlParts.push('<div class="row"><div class="k">Customer</div><div class="v">' + escPrint_(o.CustomerName || "") + '</div></div>');
+    htmlParts.push('<div class="row"><div class="k">Phone</div><div class="v">' + escPrint_(phone) + '</div></div>');
+    if (shippingMethod) htmlParts.push('<div class="row"><div class="k">Method</div><div class="v">' + escPrint_(shippingMethod) + '</div></div>');
+    if (o.DeliveryStatus) htmlParts.push('<div class="row"><div class="k">Delivery</div><div class="v">' + escPrint_(o.DeliveryStatus) + '</div></div>');
     htmlParts.push('</div>');
-    htmlParts.push('<div class="section"><div class="row"><div class="k">Total</div><div class="v amount">' + escPrint(total) + '</div></div></div>');
+    htmlParts.push('<div class="section"><div class="row"><div class="k">Total</div><div class="v amount">' + escPrint_(total) + '</div></div></div>');
     htmlParts.push('<div class="section"><div class="k">Items</div>' + itemHtml + '</div>');
-    htmlParts.push('<div class="footer">Printed: ' + escPrint(printedAt) + '</div>');
+    htmlParts.push('<div class="footer">Printed: ' + escPrint_(printedAt) + '</div>');
     htmlParts.push('<div class="noPrint" style="margin-top:10px;text-align:center;">');
     htmlParts.push('<button onclick="window.print()" style="font-size:14px;padding:8px 12px;">Print</button> ');
     htmlParts.push('<button onclick="window.close()" style="font-size:14px;padding:8px 12px;">Close</button>');
