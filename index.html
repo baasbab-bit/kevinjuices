@@ -308,7 +308,18 @@
       .itName{ font-size:13px; word-break:break-word; }
       .itOpt{ font-size:11px; }
     }
-  </style>
+      .dispatch-card-area{ color:#111827; }
+    .miniKpi{border:1px solid var(--line);border-radius:14px;padding:12px;background:rgba(255,255,255,.72);}
+    .miniKpi .big{font-size:20px;font-weight:950;margin-top:4px;}
+    @media(max-width:700px){.kpiGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+    .miniKpi{border:1px solid rgba(0,0,0,.10);border-radius:14px;padding:12px;background:rgba(255,255,255,.72);}
+    .miniKpi .big{font-size:20px;font-weight:950;margin-top:4px;}
+    .courierTable th,.courierTable td{padding:10px;border-bottom:1px solid rgba(0,0,0,.08);}
+    .courierTable th{text-align:left;background:rgba(255,255,255,.70);font-size:12px;text-transform:uppercase;color:var(--wa-muted);}
+    .courierRow{cursor:pointer;}
+    .courierRow:hover{background:rgba(37,211,102,.08);}
+    @media(max-width:700px){.kpiGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+</style>
 </head>
 <body>
   <header>
@@ -326,6 +337,7 @@
     <button class="tab" data-tab="dispatch" id="tabDispatch">Dispatch<span class="badge" id="badgeDispatch">0</span></button>
     <button class="tab" data-tab="return" id="tabReturn">Return<span class="badge" id="badgeReturn">0</span></button>
     <button class="tab" data-tab="handled" id="tabHandled">Handled<span class="badge" id="badgeHandled">0</span></button>
+    <button class="tab" data-tab="couriers" id="tabCouriers">Couriers<span class="badge" id="badgeCouriers">0</span></button>
   </div>
 
   <div class="wrap">
@@ -348,6 +360,7 @@
     <div class="grid" id="listDispatch" style="display:none;"></div>
     <div class="grid" id="listReturn" style="display:none;"></div>
     <div class="grid" id="listHandled" style="display:none;"></div>
+    <div id="listCouriers" style="display:none;"></div>
   </div>
 
   <div class="modalBackdrop" id="settingsModal">
@@ -370,6 +383,19 @@
         </div>
         <div class="muted" id="pingResult" style="margin-top:10px;"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="modalBackdrop" id="courierSummaryModal">
+    <div class="sheet" style="max-width:980px;">
+      <div class="row">
+        <div>
+          <h2>Courier Summary</h2>
+          <div class="muted" id="courierSummarySub">Outstanding balances and completed delivery earnings</div>
+        </div>
+        <button class="close" id="btnCloseCourierSummary">Close</button>
+      </div>
+      <div id="courierSummaryBody" style="padding:14px 0;"></div>
     </div>
   </div>
 
@@ -403,7 +429,10 @@
           <select class="input" id="courierSelect" style="display:none; width:220px; max-width:100%;"></select>
           <button class="btn" id="btnAssignCourier" style="display:none;">Assign Courier</button>
           <button class="btn" id="btnUnassignCourier" style="display:none;">Unassign Courier</button>
+          <input class="input" id="courierFeeInput" type="number" min="0" step="5" placeholder="Courier fee" style="display:none; width:140px;">
+          <button class="btn" id="btnSaveCourierFee" style="display:none;">Save Fee</button>
           <button class="btn" id="btnPrintOrderLabel">Print Label</button>
+          <button class="btn" id="btnPrintShippingLabel">Print Shipping Label</button>
         </div>
         <div class="muted" id="odActionResult" style="margin-top:10px;"></div>
       </div>
@@ -413,13 +442,14 @@
 <script>
   const LS_KEY = "pq_api_base_v2";
   const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
-  const TABS = ["pick","ready","dispatch","return","handled"];
+  const TABS = ["pick","ready","dispatch","return","handled","couriers"];
   const ACTION_BY_TAB = {
     pick: "getPickOrders",
     ready: "getReadyOrders",
     dispatch: "getDispatchOrders",
     return: "getReturnOrders",
-    handled: "getHandledOrders"
+    handled: "getHandledOrders",
+    couriers: "getCourierSummary"
   };
 
   let currentTab = "pick";
@@ -431,12 +461,12 @@
   let pickSaveTimer = null;
   let couriers = [];
 
-  const pools = { pick: [], ready: [], dispatch: [], return: [], handled: [] };
-  const cachesLoaded = { pick: false, ready: false, dispatch: false, return: false, handled: false };
-  const dirty = { pick: true, ready: true, dispatch: true, return: true, handled: true };
-  const loading = { pick: null, ready: null, dispatch: null, return: null, handled: null };
-  const versions = { pick: 0, ready: 0, dispatch: 0, return: 0, handled: 0 };
-  const renderSigByTab = { pick: null, ready: null, dispatch: null, return: null, handled: null };
+  const pools = { pick: [], ready: [], dispatch: [], return: [], handled: [], couriers: [] };
+  const cachesLoaded = { pick: false, ready: false, dispatch: false, return: false, handled: false, couriers: false };
+  const dirty = { pick: true, ready: true, dispatch: true, return: true, handled: true, couriers: true };
+  const loading = { pick: null, ready: null, dispatch: null, return: null, handled: null, couriers: null };
+  const versions = { pick: 0, ready: 0, dispatch: 0, return: 0, handled: 0, couriers: 0 };
+  const renderSigByTab = { pick: null, ready: null, dispatch: null, return: null, handled: null, couriers: null };
 
   const detailCache = new Map();
   const failedActions = {}; // sessionStorage-backed: orderNumber -> {type,message,time}
@@ -856,6 +886,7 @@
     if (tab === "dispatch") return document.getElementById("listDispatch");
     if (tab === "return") return document.getElementById("listReturn");
     if (tab === "handled") return document.getElementById("listHandled");
+    if (tab === "couriers") return document.getElementById("listCouriers");
     return document.getElementById("listPick");
   }
 
@@ -867,7 +898,7 @@
   }
 
   function updateTabBadge_(tab, count){
-    const id = tab === "ready" ? "badgeReady" : tab === "dispatch" ? "badgeDispatch" : tab === "return" ? "badgeReturn" : tab === "handled" ? "badgeHandled" : "badgePick";
+    const id = tab === "ready" ? "badgeReady" : tab === "dispatch" ? "badgeDispatch" : tab === "return" ? "badgeReturn" : tab === "handled" ? "badgeHandled" : tab === "couriers" ? "badgeCouriers" : "badgePick";
     const el = document.getElementById(id);
     if (el) el.textContent = String(typeof count === "number" ? count : 0);
   }
@@ -919,6 +950,18 @@
     if (tab === "dispatch") return "🚚 Geen dispatch orders.";
     if (tab === "return") return "✅ Geen retour orders.";
     return "✅ Geen handled orders.";
+  }
+
+  function shouldShowPaymentOnCard_(workflow){
+    return normWorkflow_(workflow) === "DISPATCH";
+  }
+
+  function shouldShowCourierOnCard_(workflow){
+    return normWorkflow_(workflow) === "DISPATCH";
+  }
+
+  function shouldShowAddressOnCard_(workflow){
+    return normWorkflow_(workflow) === "DISPATCH";
   }
 
   function renderList(orders, tab){
@@ -982,14 +1025,24 @@
         age.textContent = "Waiting: " + readyAgeLabel_(o);
         pills.appendChild(age);
       }
-      if (o.CourierName) pills.appendChild(pill("Courier: " + o.CourierName, "delivery"));
-      if (o.PendingCourierAssignment) pills.appendChild(pill("Courier save failed", "bad"));
-      if (o.DeliveryStatus) pills.appendChild(pill("Delivery: " + o.DeliveryStatus, "warn"));
-      if (pay) pills.appendChild(pill("Pay: " + pay, pay === "Paid" ? "ok" : pay === "Unpaid" ? "warn" : ""));
+      if (shouldShowCourierOnCard_(workflow) && o.CourierName) pills.appendChild(pill("Courier: " + o.CourierName, "delivery"));
+      if (shouldShowCourierOnCard_(workflow) && o.CourierFee !== "" && o.CourierFee !== null && o.CourierFee !== undefined) pills.appendChild(pill("Courier fee: " + formatSRD(o.CourierFee), "ok"));
+      if (shouldShowCourierOnCard_(workflow) && o.PendingCourierAssignment) pills.appendChild(pill("Courier save failed", "bad"));
+      if (shouldShowCourierOnCard_(workflow) && o.DeliveryStatus) pills.appendChild(pill("Delivery: " + o.DeliveryStatus, "warn"));
+      if (shouldShowPaymentOnCard_(workflow) && pay) pills.appendChild(pill("Pay: " + pay, (pay === "PAID" || pay === "Paid") ? "ok" : "warn"));
+      if (shouldShowPaymentOnCard_(workflow) && o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined) pills.appendChild(pill("Due: " + formatSRD(o.AmountDue), Number(o.AmountDue || 0) <= 0 ? "ok" : "bad"));
       if (workflow === "READY" && o.ReadyBy) pills.appendChild(pill("Door: " + o.ReadyBy, ""));
       if (workflow === "RETURN" && o.HandledSource) pills.appendChild(pill("Reden: " + o.HandledSource, "warn"));
       if (workflow === "HANDLED" && o.HandledSource) pills.appendChild(pill("Source: " + o.HandledSource, ""));
       card.appendChild(pills);
+      if (shouldShowAddressOnCard_(workflow) && (o.DeliveryArea || o.ShippingCity || o.ShippingAddress)) {
+        const areaLine = document.createElement("div");
+        areaLine.className = "muted dispatch-card-area";
+        areaLine.style.marginTop = "6px";
+        areaLine.style.fontWeight = "900";
+        areaLine.textContent = "Area: " + (o.DeliveryArea || o.ShippingCity || o.ShippingAddress || "");
+        card.appendChild(areaLine);
+      }
 
       return card;
     };
@@ -1069,9 +1122,80 @@
     });
   }
 
+
+  function renderCouriersTab_(data){
+    const list = document.getElementById("listCouriers");
+    if (!list) return;
+    const totals = (data && data.totals) || {};
+    const couriersList = (data && data.couriers) || [];
+    let out = `<div class="kpiGrid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 14px;">
+      <div class="miniKpi"><div class="muted">Couriers</div><div class="big">${escapeHtml(totals.Couriers || 0)}</div></div>
+      <div class="miniKpi"><div class="muted">Deliveries</div><div class="big">${escapeHtml(totals.Deliveries || 0)}</div></div>
+      <div class="miniKpi"><div class="muted">Earned</div><div class="big">${escapeHtml(formatSRD(totals.EarnedSRD || 0))}</div></div>
+      <div class="miniKpi"><div class="muted">Outstanding</div><div class="big">${escapeHtml(formatSRD(totals.OutstandingSRD || 0))}</div></div>
+    </div>`;
+    if (!couriersList.length) {
+      list.innerHTML = out + `<div class="card"><div class="muted">No courier earnings yet.</div></div>`;
+      return;
+    }
+    out += `<div class="card" style="overflow:auto;padding:0;"><table class="courierTable" style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr><th>Courier</th><th>Deliveries</th><th>Earned</th><th>Paid</th><th>Outstanding</th><th>Last Earned</th></tr></thead><tbody>`;
+    couriersList.forEach(c => {
+      const outstanding = Number(c.OutstandingSRD || 0);
+      out += `<tr class="courierRow" data-courier-id="${escapeHtml(c.CourierId || "")}" data-courier-name="${escapeHtml(c.CourierName || "")}">
+        <td style="font-weight:950;">${escapeHtml(c.CourierName || c.CourierId || "Unknown")}</td>
+        <td style="text-align:right;">${escapeHtml(c.Deliveries || 0)}</td>
+        <td style="text-align:right;">${escapeHtml(formatSRD(c.EarnedSRD || 0))}</td>
+        <td style="text-align:right;">${escapeHtml(formatSRD(c.PaidSRD || 0))}</td>
+        <td style="text-align:right;font-weight:950;${outstanding > 0 ? "color:#b91c1c;" : ""}">${escapeHtml(formatSRD(c.OutstandingSRD || 0))}</td>
+        <td>${escapeHtml(formatDateDisplay_(c.LastEarnedDate || ""))}</td>
+      </tr>`;
+    });
+    out += `</tbody></table></div><div id="courierDetailPanel" class="card" style="margin-top:12px;display:none;"></div>`;
+    list.innerHTML = out;
+    list.querySelectorAll(".courierRow").forEach(row => row.addEventListener("click", () => openCourierDetailInTab_(row.getAttribute("data-courier-id") || "", row.getAttribute("data-courier-name") || "")));
+  }
+
+  async function openCourierDetailInTab_(courierId, courierName){
+    const panel = document.getElementById("courierDetailPanel");
+    if (!panel) return;
+    panel.style.display = "block";
+    panel.innerHTML = `<div class="muted">Loading ${escapeHtml(courierName || courierId || "courier")}…</div>`;
+    try{
+      const res = await api("getCourierEntries", { courierId, courierName });
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to load courier entries");
+      const entries = res.entries || [];
+      let outstanding = 0;
+      entries.forEach(e => {
+        const status = String(e.Status || "").toUpperCase();
+        if (status !== "PAID" && status !== "VOID") outstanding += Number(e.CourierFee || 0);
+      });
+      let out = `<div class="row" style="align-items:flex-start;"><div><h2 style="margin:0;">${escapeHtml(courierName || courierId || "Courier")}</h2><div class="muted">Outstanding: <strong>${escapeHtml(formatSRD(outstanding))}</strong></div></div><button class="btn" id="btnCloseCourierDetail">Close Detail</button></div>`;
+      if (!entries.length) {
+        panel.innerHTML = out + `<div class="muted" style="margin-top:12px;">No ledger entries for this courier.</div>`;
+        document.getElementById("btnCloseCourierDetail").onclick = () => { panel.style.display = "none"; };
+        return;
+      }
+      out += `<div style="overflow:auto;margin-top:12px;"><table class="courierTable" style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr><th>Order</th><th>Customer</th><th>Area</th><th>Fee</th><th>Status</th><th>Earned Date</th></tr></thead><tbody>`;
+      entries.forEach(e => {
+        const status = String(e.Status || "").toUpperCase();
+        out += `<tr><td style="font-weight:950;">${escapeHtml(e.OrderNumber || "")}</td><td>${escapeHtml(e.CustomerName || "")}</td><td>${escapeHtml(e.DeliveryArea || "")}</td><td style="text-align:right;font-weight:900;">${escapeHtml(formatSRD(e.CourierFee || 0))}</td><td><span class="pill ${status === "PAID" ? "ok" : status === "VOID" ? "bad" : "warn"}">${escapeHtml(status || "")}</span></td><td>${escapeHtml(formatDateDisplay_(e.EarnedDate || ""))}</td></tr>`;
+      });
+      out += `</tbody></table></div><div class="muted" style="margin-top:10px;">Payout actions will be added in the next step.</div>`;
+      panel.innerHTML = out;
+      document.getElementById("btnCloseCourierDetail").onclick = () => { panel.style.display = "none"; };
+    }catch(e){
+      panel.innerHTML = `<div style="color:#b91c1c;font-weight:900;">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+
   function renderCurrent_(){
     const tab = currentTab;
     showTabContainers_(tab);
+    if (tab === "couriers") {
+      renderCouriersTab_(pools.couriersData || { totals: {}, couriers: pools.couriers || [] });
+      return;
+    }
     const sig = tab + "|" + ((searchQuery || "").trim()) + "|" + (tab === "ready" ? readyFilter : "") + "|" + (tab === "dispatch" ? dispatchFilter : "") + "|" + String(versions[tab]);
     const listEl = getListEl_(tab);
     if (listEl && renderSigByTab[tab] === sig && listEl.dataset.rendered === "1") return;
@@ -1095,6 +1219,17 @@
     if (loading[tab]) return loading[tab];
 
     loading[tab] = (async () => {
+      if (tab === "couriers") {
+        const res = await api("getCourierSummary");
+        if (!res || !res.ok) throw new Error((res && res.error) || "API error (getCourierSummary)");
+        pools.couriersData = res;
+        pools.couriers = res.couriers || [];
+        cachesLoaded[tab] = true;
+        dirty[tab] = false;
+        versions[tab]++;
+        updateTabBadge_(tab, (res.couriers || []).length);
+        return;
+      }
       const res = await api(ACTION_BY_TAB[tab]);
       if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + ACTION_BY_TAB[tab] + ")");
       let incoming = sortNewestFirst_(applyPendingCourierAssignmentsToOrders_(res.orders || []), tab);
@@ -1210,6 +1345,8 @@
     document.getElementById("tabDispatch").classList.toggle("active", currentTab === "dispatch");
     document.getElementById("tabReturn").classList.toggle("active", currentTab === "return");
     document.getElementById("tabHandled").classList.toggle("active", currentTab === "handled");
+    const tabCouriersEl = document.getElementById("tabCouriers");
+    if (tabCouriersEl) tabCouriersEl.classList.toggle("active", currentTab === "couriers");
 
     showTabContainers_(currentTab);
     const rf = document.getElementById("readyFilters");
@@ -1709,18 +1846,180 @@
     }, 60000);
   }
 
+
+  function paymentBadgeText_(o){
+    var status = String(o && o.PaymentStatus || "").trim().toUpperCase();
+    var due = Number(o && o.AmountDue || 0);
+    if (status) return status;
+    if (due <= 0 && (o && o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined)) return "PAID";
+    if (due > 0) return "UNPAID";
+    return "";
+  }
+
+  function qrImageUrl_(text){
+    return "https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=1&data=" + encodeURIComponent(String(text || ""));
+  }
+
+  function hasMultipleQuantity_(o){
+    var items = Array.isArray(o && o.Items) ? o.Items : [];
+    return items.some(function(it){ return Number(it && it.qty || 1) > 1; });
+  }
+
+  function buildShippingLabelHtml_(o){
+    o = o || {};
+    var items = Array.isArray(o.Items) ? o.Items : [];
+    var orderNumber = String(o.OrderNumber || "");
+    var fulfillment = normFulfillmentType_(o.FulfillmentType);
+    var paymentStatus = paymentBadgeText_(o);
+    var amountDue = (o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined) ? formatSRD(o.AmountDue) : "";
+    var courier = String(o.CourierName || "").trim();
+    var area = String(o.DeliveryArea || o.ShippingCity || "").trim();
+    var address = String(o.ShippingAddress || "").trim();
+    var city = String(o.ShippingCity || "").trim();
+    var phone = String(o.CustomerPhone || "").trim();
+    var printedAt = new Date().toLocaleString("nl-NL", { timeZone:"America/Paramaribo" });
+    var multipleQty = hasMultipleQuantity_(o);
+
+    var itemHtml = "";
+    if (!items.length) {
+      itemHtml = '<div class="item">No items</div>';
+    } else {
+      items.forEach(function(it){
+        var qty = Number((it && it.qty) || 1);
+        var name = escPrint_((it && it.name) || "");
+        var opts = formatOptions(it && it.options);
+        var cls = qty > 1 ? "item multi" : "item";
+        itemHtml += '<div class="' + cls + '">';
+        itemHtml += '<div><strong>' + escPrint_(qty) + 'x</strong> ' + name + '</div>';
+        if (opts) itemHtml += '<div class="opts">' + escPrint_(opts) + '</div>';
+        itemHtml += '</div>';
+      });
+    }
+
+    var parts = [];
+    parts.push('<!doctype html><html><head><meta charset="utf-8">');
+    parts.push('<title>Shipping Label ' + escPrint_(orderNumber) + '</title>');
+    parts.push('<style>');
+    parts.push('@page{size:80mm auto;margin:3mm;}');
+    parts.push('*{box-sizing:border-box;}');
+    parts.push('body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;font-size:12px;line-height:1.25;}');
+    parts.push('.label{width:74mm;}');
+    parts.push('.order{font-size:25px;font-weight:900;text-align:center;border-top:2px solid #000;border-bottom:2px solid #000;padding:6px 0;margin:4px 0;}');
+    parts.push('.qr{width:38mm;height:38mm;display:block;margin:5px auto;}');
+    parts.push('.badges{text-align:center;margin:5px 0;}');
+    parts.push('.badge{display:inline-block;border:2px solid #000;border-radius:6px;padding:4px 7px;margin:2px;font-size:15px;font-weight:900;}');
+    parts.push('.badge.due{font-size:17px;}');
+    parts.push('.warn{border:3px solid #000;padding:5px;text-align:center;font-size:15px;font-weight:900;margin:5px 0;}');
+    parts.push('.section{border-top:1px dashed #000;margin-top:6px;padding-top:5px;}');
+    parts.push('.title{font-size:12px;font-weight:900;text-transform:uppercase;margin-bottom:3px;}');
+    parts.push('.customer{font-size:17px;font-weight:900;}');
+    parts.push('.phone{font-size:15px;font-weight:900;}');
+    parts.push('.area{font-size:20px;font-weight:900;text-align:center;border:2px solid #000;padding:5px;margin-top:4px;}');
+    parts.push('.address{font-size:14px;font-weight:700;white-space:pre-wrap;word-break:break-word;}');
+    parts.push('.courier{font-size:18px;font-weight:900;text-align:center;}');
+    parts.push('.item{padding:4px 0;border-bottom:1px dotted #777;}');
+    parts.push('.item.multi{border:2px solid #000;padding:5px;margin:4px 0;font-size:14px;font-weight:900;}');
+    parts.push('.opts{font-size:11px;margin-left:14px;}');
+    parts.push('.footer{border-top:1px dashed #000;margin-top:6px;padding-top:5px;text-align:center;font-size:10px;}');
+    parts.push('.age{font-size:13px;font-weight:900;text-align:center;margin-top:5px;}');
+    parts.push('@media print{.noPrint{display:none!important;}body{width:74mm;}}');
+    parts.push('</style></head><body><div class="label">');
+    parts.push('<div class="order">' + escPrint_(orderNumber) + '</div>');
+    parts.push('<img class="qr" src="' + escPrint_(qrImageUrl_(orderNumber)) + '" alt="QR">');
+    parts.push('<div class="badges"><span class="badge">' + escPrint_(fulfillment) + '</span>');
+    if (paymentStatus) parts.push('<span class="badge">' + escPrint_(paymentStatus) + '</span>');
+    if (amountDue) parts.push('<span class="badge due">DUE: ' + escPrint_(amountDue) + '</span>');
+    parts.push('</div>');
+    if (multipleQty) parts.push('<div class="warn">⚠ MULTIPLE QUANTITIES</div>');
+    parts.push('<div class="age">21+ ID REQUIRED</div>');
+    parts.push('<div class="section"><div class="title">Customer</div><div class="customer">' + escPrint_(o.CustomerName || "") + '</div>');
+    if (phone) parts.push('<div class="phone">' + escPrint_(phone) + '</div>');
+    parts.push('</div>');
+    if (area || address || city) {
+      parts.push('<div class="section"><div class="title">Delivery Area</div><div class="area">' + escPrint_(area || city || "ADDRESS") + '</div></div>');
+      parts.push('<div class="section"><div class="title">Address</div><div class="address">' + escPrint_(address || "") + (city && city !== area ? "<br>" + escPrint_(city) : "") + '</div></div>');
+    }
+    if (courier) parts.push('<div class="section"><div class="title">Courier</div><div class="courier">' + escPrint_(courier) + '</div></div>');
+    parts.push('<div class="section"><div class="title">Items</div>' + itemHtml + '</div>');
+    if (o.CustomerNotes) parts.push('<div class="section"><div class="title">Notes</div><div class="address">' + escPrint_(o.CustomerNotes || "") + '</div></div>');
+    parts.push('<div class="footer">Printed: ' + escPrint_(printedAt) + '</div>');
+    parts.push('<div class="noPrint" style="margin-top:10px;text-align:center;"><button onclick="window.print()" style="font-size:14px;padding:8px 12px;">Print</button> <button onclick="window.close()" style="font-size:14px;padding:8px 12px;">Close</button></div>');
+    parts.push('</div><script>window.addEventListener("load",function(){setTimeout(function(){window.print();},500);});<\\/script></body></html>');
+    return parts.join('');
+  }
+
+  async function printCurrentShippingLabel_(){
+    if (!currentOrder) throw new Error("No order selected");
+    var orderNumber = String(currentOrder.OrderNumber || "").trim();
+    var orderToPrint = currentOrder;
+
+    try{
+      var fresh = await prefetchOrderDetail_(orderNumber, true);
+      if (fresh) {
+        currentOrder = fresh;
+        initPickState_(fresh);
+        applyOrderToModal_(fresh);
+        orderToPrint = fresh;
+      }
+    }catch(e){}
+
+    var blob = new Blob([buildShippingLabelHtml_(orderToPrint)], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var w = window.open(url, "_blank", "width=420,height=760");
+
+    if (!w) {
+      URL.revokeObjectURL(url);
+      throw new Error("Popup blocked. Allow popups for this page to print labels.");
+    }
+
+    setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(e){} }, 60000);
+  }
+
+
+
+  async function saveCourierFeeForCurrentOrder_(){
+    if (!currentOrder) throw new Error("No order selected");
+    const orderNumber = String(currentOrder.OrderNumber || "").trim();
+    const inp = document.getElementById("courierFeeInput");
+    const raw = inp ? String(inp.value || "").trim() : "";
+    const fee = raw === "" ? "" : Number(raw);
+    if (fee !== "" && (isNaN(fee) || fee < 0)) throw new Error("Invalid courier fee");
+    const patch = { CourierFee: fee === "" ? "" : fee, CourierFeeStatus: fee === "" || fee <= 0 ? "" : "SET", CourierFeeSetAt: new Date().toISOString(), CourierFeeSetBy: "PickQueue" };
+    Object.assign(currentOrder, patch);
+    updateOrderInCaches_(orderNumber, patch);
+    setCachedOrderDetail_(currentOrder);
+    renderCurrent_();
+    applyOrderToModal_(currentOrder);
+    const resEl = document.getElementById("odActionResult");
+    if (resEl) resEl.textContent = "Saving courier fee…";
+    api("setCourierFee", { orderNumber, courierFee: fee === "" ? "" : String(fee), source: "PickQueue" }).then(res => {
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to save courier fee");
+      const finalPatch = { CourierFee: res.CourierFee, CourierFeeStatus: res.CourierFeeStatus || "", CourierFeeSetAt: res.CourierFeeSetAt || patch.CourierFeeSetAt, CourierFeeSetBy: res.CourierFeeSetBy || "PickQueue" };
+      Object.assign(currentOrder, finalPatch);
+      updateOrderInCaches_(orderNumber, finalPatch);
+      setCachedOrderDetail_(currentOrder);
+      if (resEl) resEl.textContent = "Courier fee saved";
+      renderCurrent_();
+      applyOrderToModal_(currentOrder);
+    }).catch(e => { if (resEl) resEl.textContent = "❌ Courier fee failed to save: " + (e.message || String(e)); });
+  }
+
   function updateOrderActionsUI_(){
     const hint = document.getElementById("odStatusHint");
     const btn = document.getElementById("btnMarkReady");
     const courierSelect = document.getElementById("courierSelect");
     const btnAssignCourier = document.getElementById("btnAssignCourier");
     const btnUnassignCourier = document.getElementById("btnUnassignCourier");
+    const courierFeeInput = document.getElementById("courierFeeInput");
+    const btnSaveCourierFee = document.getElementById("btnSaveCourierFee");
     const sec = document.getElementById("odActionsSec");
     if (!hint || !btn || !sec) return;
 
     if (courierSelect) courierSelect.style.display = "none";
     if (btnAssignCourier) btnAssignCourier.style.display = "none";
     if (btnUnassignCourier) btnUnassignCourier.style.display = "none";
+    if (courierFeeInput) courierFeeInput.style.display = "none";
+    if (btnSaveCourierFee) btnSaveCourierFee.style.display = "none";
 
     if (!currentOrder) {
       hint.textContent = "—";
@@ -1760,6 +2059,11 @@
         btnUnassignCourier.style.display = "inline-block";
         btnUnassignCourier.textContent = "Unassign Courier";
       }
+      if (courierFeeInput) {
+        courierFeeInput.style.display = "inline-block";
+        courierFeeInput.value = currentOrder.CourierFee || "";
+      }
+      if (btnSaveCourierFee) btnSaveCourierFee.style.display = "inline-block";
     } else if (workflow === "RETURN") {
       sec.style.display = "block";
       btn.textContent = "Terug naar warehouse bevestigd";
@@ -1870,12 +2174,16 @@
     addKV(kv, "Tel", o.CustomerPhone);
     addKV(kv, "Email", o.CustomerEmail);
     addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
+    addKV(kv, "Payment Status", o.PaymentStatus || "");
+    addKV(kv, "Amount Due", (o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined) ? formatSRD(o.AmountDue) : "");
+    addKV(kv, "Payment Method", o.PaymentMethod || "");
     addKV(kv, "Workflow", displayWorkflow_(o.WorkflowStatus));
     addKV(kv, "Fulfillment", displayFulfillmentType_(o.FulfillmentType));
     addKV(kv, "Shipping Method", o.ShippingMethod || "");
     addKV(kv, "ReadyAt", formatDateDisplay_(o.ReadyAt || ""));
     addKV(kv, "DispatchAt", formatDateDisplay_(o.DispatchAt || ""));
     addKV(kv, "Courier", o.CourierName || "");
+    addKV(kv, "Courier Fee", (o.CourierFee !== "" && o.CourierFee !== null && o.CourierFee !== undefined) ? formatSRD(o.CourierFee) : "");
     addKV(kv, "DeliveryStatus", o.DeliveryStatus || "");
     addKV(kv, "DispatchedAt", formatDateDisplay_(o.DispatchedAt || ""));
     addKV(kv, "ReturnAt", formatDateDisplay_(o.ReturnAt || ""));
@@ -2292,6 +2600,10 @@
   document.getElementById("tabDispatch").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("dispatch"); });
   document.getElementById("tabReturn").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("return"); });
   document.getElementById("tabHandled").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("handled"); });
+  const tabCouriersClickEl = document.getElementById("tabCouriers");
+  if (tabCouriersClickEl) {
+    tabCouriersClickEl.addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("couriers"); });
+  }
 
 
   document.querySelectorAll("[data-ready-filter]").forEach(btn => {
@@ -2320,9 +2632,122 @@
     });
   }
 
+
+  function courierSummaryMoney_(v){
+    return formatSRD(v || 0);
+  }
+
+  function renderCourierSummary_(data){
+    const body = document.getElementById("courierSummaryBody");
+    if (!body) return;
+
+    const totals = (data && data.totals) || {};
+    const couriers = (data && data.couriers) || [];
+
+    let out = "";
+
+    out += `
+      <div class="kpiGrid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px;">
+        <div class="miniKpi"><div class="muted">Couriers</div><div class="big">${escapeHtml(totals.Couriers || 0)}</div></div>
+        <div class="miniKpi"><div class="muted">Deliveries</div><div class="big">${escapeHtml(totals.Deliveries || 0)}</div></div>
+        <div class="miniKpi"><div class="muted">Earned</div><div class="big">${escapeHtml(courierSummaryMoney_(totals.EarnedSRD))}</div></div>
+        <div class="miniKpi"><div class="muted">Outstanding</div><div class="big">${escapeHtml(courierSummaryMoney_(totals.OutstandingSRD))}</div></div>
+      </div>
+    `;
+
+    if (!couriers.length) {
+      out += `<div class="empty">No courier earnings yet.</div>`;
+      body.innerHTML = out;
+      return;
+    }
+
+    out += `
+      <div style="overflow:auto;">
+        <table class="summaryTable" style="width:100%;border-collapse:collapse;font-size:14px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Courier</th>
+              <th style="text-align:right;padding:8px;border-bottom:1px solid var(--line);">Deliveries</th>
+              <th style="text-align:right;padding:8px;border-bottom:1px solid var(--line);">Earned</th>
+              <th style="text-align:right;padding:8px;border-bottom:1px solid var(--line);">Paid</th>
+              <th style="text-align:right;padding:8px;border-bottom:1px solid var(--line);">Outstanding</th>
+              <th style="text-align:left;padding:8px;border-bottom:1px solid var(--line);">Last Earned</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    couriers.forEach(c => {
+      const outstanding = Number(c.OutstandingSRD || 0);
+      out += `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid var(--line);font-weight:900;">${escapeHtml(c.CourierName || c.CourierId || "Unknown")}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;">${escapeHtml(c.Deliveries || 0)}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;">${escapeHtml(courierSummaryMoney_(c.EarnedSRD))}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;">${escapeHtml(courierSummaryMoney_(c.PaidSRD))}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;font-weight:900;${outstanding > 0 ? "color:#b91c1c;" : ""}">${escapeHtml(courierSummaryMoney_(c.OutstandingSRD))}</td>
+          <td style="padding:8px;border-bottom:1px solid var(--line);">${escapeHtml(formatDateDisplay_(c.LastEarnedDate || ""))}</td>
+        </tr>
+      `;
+    });
+
+    out += `</tbody></table></div>`;
+    body.innerHTML = out;
+  }
+
+  async function openCourierSummary_(){
+    const modal = document.getElementById("courierSummaryModal");
+    const body = document.getElementById("courierSummaryBody");
+    if (!modal || !body) return;
+
+    body.innerHTML = `<div class="muted">Loading courier summary…</div>`;
+    modal.classList.add("show");
+
+    try {
+      const res = await api("getCourierSummary");
+      if (!res || !res.ok) throw new Error((res && res.error) || "Failed to load courier summary");
+      renderCourierSummary_(res);
+    } catch(e) {
+      body.innerHTML = `<div class="error">❌ ${escapeHtml(e.message || String(e))}</div>`;
+    }
+  }
+
+  function closeCourierSummary_(){
+    const modal = document.getElementById("courierSummaryModal");
+    if (modal) modal.classList.remove("show");
+  }
+
+
+  const btnCourierSummaryLegacy = document.getElementById("btnCourierSummary");
+  if (btnCourierSummaryLegacy) {
+    btnCourierSummaryLegacy.onclick = async () => {
+      await openCourierSummary_();
+    };
+  }
+
+  const btnCloseCourierSummaryLegacy = document.getElementById("btnCloseCourierSummary");
+  if (btnCloseCourierSummaryLegacy) {
+    btnCloseCourierSummaryLegacy.onclick = () => {
+      closeCourierSummary_();
+    };
+  }
+
+  const courierSummaryModalLegacy = document.getElementById("courierSummaryModal");
+  if (courierSummaryModalLegacy) {
+    courierSummaryModalLegacy.addEventListener("click", ev => {
+      if (ev.target && ev.target.id === "courierSummaryModal") closeCourierSummary_();
+    });
+  }
+
   document.getElementById("btnRefresh").onclick = async () => {
     dirty[currentTab] = true;
     await safeLoadOrders(true);
+  };
+
+  document.getElementById("btnSaveCourierFee").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{ if (resEl) resEl.textContent = ""; await saveCourierFeeForCurrentOrder_(); }
+    catch(e){ if (resEl) resEl.textContent = "❌ " + (e.message || String(e)); }
   };
 
   document.getElementById("btnUnassignCourier").onclick = async () => {
@@ -2340,6 +2765,16 @@
     try{
       if (resEl) resEl.textContent = "";
       await assignCourierForCurrentOrder_();
+    }catch(e){
+      if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
+    }
+  };
+
+  document.getElementById("btnPrintShippingLabel").onclick = async () => {
+    const resEl = document.getElementById("odActionResult");
+    try{
+      if (resEl) resEl.textContent = "";
+      await printCurrentShippingLabel_();
     }catch(e){
       if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
     }
@@ -2694,6 +3129,11 @@
   });
 })();
 </script>
+<button class="xbtn" id="btnCloseCourierSummary">×</button>
+      </div>
+      <div id="courierSummaryBody" style="padding:14px;"></div>
+    </div>
+  </div>
 
 </body>
 </html>
