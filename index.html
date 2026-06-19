@@ -242,8 +242,25 @@
       #searchBox{ width:100% !important; max-width:none !important; flex:1 1 100%; order:3; }
       #buildInfo{ flex:1 1 100%; order:4; font-size:11px; line-height:1.2; }
       .btn,.close{ padding:8px 10px; border-radius:12px; font-size:12px; }
-      .tabs{ top:100px; padding:8px 12px; gap:6px; }
-      .tab{ padding:9px 8px; font-size:13px; }
+      .tabs{
+        top:100px;
+        padding:8px 12px;
+        gap:6px;
+        flex-wrap:wrap;
+      }
+      .tab{
+        flex:0 0 calc(33.333% - 4px);
+        padding:9px 6px;
+        font-size:12px;
+        border-radius:12px;
+        min-width:0;
+      }
+      .tab .badge{
+        min-width:18px;
+        height:17px;
+        padding:0 5px;
+        font-size:11px;
+      }
       .wrap{ padding:0 12px 16px; }
       .grid{ gap:10px; }
       .card{ padding:12px 12px 10px 16px; border-radius:16px; }
@@ -319,6 +336,81 @@
     .courierRow{cursor:pointer;}
     .courierRow:hover{background:rgba(37,211,102,.08);}
     @media(max-width:700px){.kpiGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+.pickStickyActions .btn{padding:9px 10px;font-size:12px;}
+    }
+
+    .sheet.pickModeSheet{padding-bottom:96px !important;}
+    @media(max-width:640px){.sheet.pickModeSheet{padding-bottom:104px !important;}}
+
+    .pickStickyBar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      z-index:2000;
+      padding:10px 12px max(10px,env(safe-area-inset-bottom));
+      background:rgba(255,255,255,.98);
+      border-top:1px solid rgba(0,0,0,.12);
+      box-shadow:0 -8px 24px rgba(0,0,0,.16);
+      display:grid;
+      grid-template-columns:1fr auto auto;
+      align-items:center;
+      gap:10px;
+      backdrop-filter:blur(8px);
+    }
+    .pickPrimaryBtn{
+      background:var(--wa-accent) !important;
+      border-color:var(--wa-accent) !important;
+      color:#0b2b22 !important;
+      font-weight:950 !important;
+      min-height:44px;
+      border-radius:14px !important;
+      white-space:nowrap;
+    }
+    .pickPrimaryBtn[disabled]{
+      background:#f3f4f6 !important;
+      border-color:#e5e7eb !important;
+      color:#9ca3af !important;
+      opacity:1 !important;
+    }
+    .pickBackBtn{
+      min-height:44px;
+      border-radius:14px !important;
+      white-space:nowrap;
+    }
+    .pickStickyStatus{
+      text-align:center;
+      min-width:72px;
+    }
+    .pickStickyMeta{
+      font-weight:950;
+      font-size:13px;
+      color:var(--wa-text);
+      line-height:1.15;
+      white-space:nowrap;
+    }
+    .pickStickySub{
+      font-size:10px;
+      color:var(--wa-muted);
+      font-weight:800;
+      margin-top:2px;
+      white-space:nowrap;
+    }
+    @media(max-width:420px){
+      .pickStickyBar{
+        grid-template-columns:1fr auto auto;
+        gap:8px;
+        padding-left:10px;
+        padding-right:10px;
+      }
+      .pickPrimaryBtn,.pickBackBtn{
+        padding:9px 10px !important;
+        font-size:12px !important;
+      }
+      .pickStickyMeta{font-size:12px;}
+      .pickStickySub{display:none;}
+    }
+
 </style>
 </head>
 <body>
@@ -403,7 +495,7 @@
     <div class="sheet">
       <div class="row">
         <h2 id="odTitle">Order</h2>
-        <button class="close" id="closeOrder">Close</button>
+        <button class="close" id="closeOrder" style="display:none;">Close</button>
       </div>
 
       <div class="sec">
@@ -435,6 +527,14 @@
           <button class="btn" id="btnPrintShippingLabel">Print Shipping Label</button>
         </div>
         <div class="muted" id="odActionResult" style="margin-top:10px;"></div>
+        <div class="pickStickyBar" id="pickStickyBar" style="display:none;">
+          <button class="btn pickPrimaryBtn" id="btnStickyReady" disabled>Markeer als Ready</button>
+          <div class="pickStickyStatus">
+            <div class="pickStickyMeta" id="pickStickyMeta">Picked 0 / 0</div>
+            <div class="pickStickySub" id="pickStickySub">0 van 0 gecontroleerd</div>
+          </div>
+          <button class="btn pickBackBtn" id="btnStickyClose">Terug</button>
+        </div>
       </div>
     </div>
   </div>
@@ -460,6 +560,7 @@
   let pickChecks = [];
   let pickSaveTimer = null;
   let couriers = [];
+  let orderModalHistoryOpen = false;
 
   const pools = { pick: [], ready: [], dispatch: [], return: [], handled: [], couriers: [] };
   const cachesLoaded = { pick: false, ready: false, dispatch: false, return: false, handled: false, couriers: false };
@@ -1526,11 +1627,28 @@
 
   function updatePickUI_(){
     const el = document.getElementById("odPickStatus");
-    if (!el) return;
-    if (!currentOrder) { el.textContent = ""; return; }
+    if (!currentOrder) { if (el) el.textContent = ""; return; }
+
     const done = pickCompleteNow_();
     currentOrder.PickComplete = done;
-    el.textContent = done ? "Pick: Complete ✅" : "Pick: Incompleet";
+
+    const checks = Array.isArray(currentOrder.PickChecks) ? currentOrder.PickChecks : [];
+    const total = checks.length;
+    const picked = checks.filter(Boolean).length;
+
+    if (el) el.textContent = done ? "Pick: Complete ✅" : "Pick: Incompleet";
+
+    const stickyMeta = document.getElementById("pickStickyMeta");
+    const stickySub = document.getElementById("pickStickySub");
+    const stickyReady = document.getElementById("btnStickyReady");
+
+    if (stickyMeta) stickyMeta.textContent = "Picked " + picked + " / " + total;
+    if (stickySub) stickySub.textContent = picked + " van " + total + " gecontroleerd";
+    if (stickyReady) {
+      stickyReady.disabled = !done;
+      stickyReady.textContent = done ? "✓ Markeer als Ready" : "Markeer als Ready";
+    }
+
     updateOrderActionsUI_();
   }
 
@@ -2004,6 +2122,15 @@
     }).catch(e => { if (resEl) resEl.textContent = "❌ Courier fee failed to save: " + (e.message || String(e)); });
   }
 
+
+  function updatePickModeSheetClass_(){
+    const modal = document.getElementById("orderModal");
+    const sheet = modal ? modal.querySelector(".sheet") : null;
+    const bar = document.getElementById("pickStickyBar");
+    if (!sheet || !bar) return;
+    sheet.classList.toggle("pickModeSheet", bar.style.display !== "none");
+  }
+
   function updateOrderActionsUI_(){
     const hint = document.getElementById("odStatusHint");
     const btn = document.getElementById("btnMarkReady");
@@ -2013,6 +2140,8 @@
     const courierFeeInput = document.getElementById("courierFeeInput");
     const btnSaveCourierFee = document.getElementById("btnSaveCourierFee");
     const sec = document.getElementById("odActionsSec");
+    const pickStickyBar = document.getElementById("pickStickyBar");
+    const stickyReady = document.getElementById("btnStickyReady");
     if (!hint || !btn || !sec) return;
 
     if (courierSelect) courierSelect.style.display = "none";
@@ -2028,6 +2157,8 @@
     }
 
     const workflow = normWorkflow_(currentOrder.WorkflowStatus);
+    if (pickStickyBar) pickStickyBar.style.display = workflow === "PICK" ? "flex" : "none";
+    updatePickModeSheetClass_();
     const pickComplete = pickCompleteNow_();
     currentOrder.PickComplete = pickComplete;
 
@@ -2075,10 +2206,44 @@
     }
   }
 
+
+  function openOrderModalHistory_(){
+    try{
+      if (!orderModalHistoryOpen) {
+        history.pushState({ pqModal: "order" }, "", location.href);
+        orderModalHistoryOpen = true;
+      }
+    }catch(e){}
+  }
+
+
+  function hidePickStickyBar_(){
+    const bar = document.getElementById("pickStickyBar");
+    if (bar) bar.style.display = "none";
+    const modal = document.getElementById("orderModal");
+    const sheet = modal ? modal.querySelector(".sheet") : null;
+    if (sheet) sheet.classList.remove("pickModeSheet");
+  }
+
+  function closeOrderModal_(fromPopState){
+    const modal = document.getElementById("orderModal");
+    if (modal) modal.classList.remove("show");
+    hidePickStickyBar_();
+    currentOrder = null;
+
+    if (orderModalHistoryOpen) {
+      orderModalHistoryOpen = false;
+      if (!fromPopState) {
+        try { history.back(); } catch(e){}
+      }
+    }
+  }
+
   async function openOrder(orderNumber){
     try{
       const modal = document.getElementById("orderModal");
       modal.classList.add("show");
+      openOrderModalHistory_();
       document.getElementById("odTitle").textContent = "Order " + orderNumber;
       document.getElementById("odKV").innerHTML = `<div class="muted">Loading</div><div>…</div>`;
       document.getElementById("odItems").innerHTML = "";
@@ -2169,27 +2334,46 @@
       kv.appendChild(b);
     }
 
+    const workflow = normWorkflow_(o.WorkflowStatus);
+    const fulfillment = normFulfillmentType_(o.FulfillmentType);
+
     addKV(kv, "Order", o.OrderNumber);
     addKV(kv, "Naam", o.CustomerName);
     addKV(kv, "Tel", o.CustomerPhone);
-    addKV(kv, "Email", o.CustomerEmail);
-    addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
-    addKV(kv, "Payment Status", o.PaymentStatus || "");
-    addKV(kv, "Amount Due", (o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined) ? formatSRD(o.AmountDue) : "");
-    addKV(kv, "Payment Method", o.PaymentMethod || "");
-    addKV(kv, "Workflow", displayWorkflow_(o.WorkflowStatus));
-    addKV(kv, "Fulfillment", displayFulfillmentType_(o.FulfillmentType));
-    addKV(kv, "Shipping Method", o.ShippingMethod || "");
-    addKV(kv, "ReadyAt", formatDateDisplay_(o.ReadyAt || ""));
-    addKV(kv, "DispatchAt", formatDateDisplay_(o.DispatchAt || ""));
-    addKV(kv, "Courier", o.CourierName || "");
-    addKV(kv, "Courier Fee", (o.CourierFee !== "" && o.CourierFee !== null && o.CourierFee !== undefined) ? formatSRD(o.CourierFee) : "");
-    addKV(kv, "DeliveryStatus", o.DeliveryStatus || "");
-    addKV(kv, "DispatchedAt", formatDateDisplay_(o.DispatchedAt || ""));
-    addKV(kv, "ReturnAt", formatDateDisplay_(o.ReturnAt || ""));
-    addKV(kv, "ReturnedAt", formatDateDisplay_(o.ReturnedAt || ""));
-    addKV(kv, "HandledAt", formatDateDisplay_(o.HandledAt || ""));
-    addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+    addKV(kv, "Workflow", displayWorkflow_(workflow));
+    addKV(kv, "Fulfillment", displayFulfillmentType_(fulfillment));
+
+    if (workflow === "PICK") {
+      if (o.ShippingMethod) addKV(kv, "Shipping Method", o.ShippingMethod || "");
+      addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+    } else if (workflow === "READY") {
+      if (o.ReadyAt) addKV(kv, "ReadyAt", formatDateDisplay_(o.ReadyAt || ""));
+      if (o.ReadyBy) addKV(kv, "ReadyBy", o.ReadyBy || "");
+      addKV(kv, "Pick", o.PickComplete ? "Complete" : "Incompleet");
+    } else if (workflow === "DISPATCH") {
+      addKV(kv, "Total", formatSRD(o.OrderTotalSRD));
+      addKV(kv, "Payment Status", o.PaymentStatus || "");
+      addKV(kv, "Amount Due", (o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined) ? formatSRD(o.AmountDue) : "");
+      addKV(kv, "Payment Method", o.PaymentMethod || "");
+      if (o.ShippingMethod) addKV(kv, "Shipping Method", o.ShippingMethod || "");
+      if (o.ShippingAddress) addKV(kv, "Address", o.ShippingAddress || "");
+      if (o.ShippingCity) addKV(kv, "City", o.ShippingCity || "");
+      if (o.DeliveryArea) addKV(kv, "Area", o.DeliveryArea || "");
+      addKV(kv, "Courier", o.CourierName || "");
+      addKV(kv, "Courier Fee", (o.CourierFee !== "" && o.CourierFee !== null && o.CourierFee !== undefined) ? formatSRD(o.CourierFee) : "");
+      if (o.DeliveryStatus) addKV(kv, "DeliveryStatus", o.DeliveryStatus || "");
+      if (o.DispatchAt || o.DispatchedAt) addKV(kv, "DispatchAt", formatDateDisplay_(o.DispatchAt || o.DispatchedAt || ""));
+    } else if (workflow === "RETURN") {
+      if (o.ReturnAt) addKV(kv, "ReturnAt", formatDateDisplay_(o.ReturnAt || ""));
+      if (o.ReturnedAt) addKV(kv, "ReturnedAt", formatDateDisplay_(o.ReturnedAt || ""));
+      if (o.HandledSource) addKV(kv, "Reason", o.HandledSource || "");
+      addKV(kv, "Courier", o.CourierName || "");
+    } else if (workflow === "HANDLED") {
+      if (o.HandledAt) addKV(kv, "HandledAt", formatDateDisplay_(o.HandledAt || ""));
+      if (o.HandledSource) addKV(kv, "Source", o.HandledSource || "");
+      addKV(kv, "Courier", o.CourierName || "");
+      if (o.CourierFee) addKV(kv, "Courier Fee", formatSRD(o.CourierFee));
+    }
 
     const items = Array.isArray(o.Items) ? o.Items : [];
     const multiQtyItems = items.filter(it => Number(it && it.qty || 1) > 1);
@@ -2214,6 +2398,13 @@
 
     const itemsWrap = document.getElementById("odItems");
     itemsWrap.innerHTML = "";
+
+    if (multiQtyItems.length) {
+      const multiWarning = document.createElement("div");
+      multiWarning.className = "multiQtyTopWarning";
+      multiWarning.textContent = "⚠ Let op: deze order bevat meerdere stuks van één of meer items.";
+      itemsWrap.appendChild(multiWarning);
+    }
 
     items.forEach((it, idx) => {
       const row = document.createElement("div");
@@ -2258,7 +2449,7 @@
 
       body.innerHTML = `
         <div class="itName">
-          <span class="qtyBadge ${isMultiQty ? "" : "normal"}">${escapeHtml(qty)}x</span>${escapeHtml(it.name || "")}
+          <span class="qtyBadge ${isMultiQty ? "" : "normal"}">${isMultiQty ? "⚠ " : ""}${escapeHtml(qty)}x</span>${escapeHtml(it.name || "")}
         </div>
         ${isMultiQty ? `<div class="multiQtyWarning">⚠ Let op: ${escapeHtml(qty)} stuks pakken</div>` : ""}
         ${opts ? `<div class="itOpt">${escapeHtml(opts)}</div>` : ""}
@@ -2327,6 +2518,7 @@
     setCachedOrderDetail_(currentOrder);
 
     if (modal) modal.classList.remove("show");
+    hidePickStickyBar_();
     if (resEl) resEl.textContent = "";
 
     const patch = { WorkflowStatus: targetWorkflow, PickComplete: true, PickChecks: pickChecks, DetailPreloaded: true };
@@ -2338,6 +2530,10 @@
     if (startedFromWorkflow === "PICK") currentTab = "pick";
     renderCurrent_();
     backgroundRefreshCounts_();
+
+    if (startedFromWorkflow === "PICK") {
+      autoOpenNextPickOrder_(orderNumber);
+    }
 
     api("markPickedComplete", {
       orderNumber,
@@ -2376,6 +2572,41 @@
       renderCurrent_();
       alert((targetWorkflow === "DISPATCH" ? "Dispatch" : "Ready") + " opslaan mislukt. De order blijft in " + (targetWorkflow === "DISPATCH" ? "Dispatch" : "Ready") + " met een rode waarschuwing. Tik de order om opnieuw te proberen.");
     });
+  }
+
+
+  function findNextPickOrderAfter_(currentOrderNumber){
+    const current = String(currentOrderNumber || "").trim();
+    const pickList = Array.isArray(pools.pick) ? pools.pick : [];
+    const visible = filterOrders_(pickList).filter(o => normWorkflow_(o && o.WorkflowStatus) === "PICK");
+    if (!visible.length) return null;
+
+    const idx = visible.findIndex(o => String(o && o.OrderNumber || "").trim() === current);
+    if (idx === -1) return visible[0] || null;
+    return visible[idx + 1] || visible[0] || null;
+  }
+
+  function autoOpenNextPickOrder_(previousOrderNumber){
+    try{
+      const next = findNextPickOrderAfter_(previousOrderNumber);
+
+      if (next && next.OrderNumber) {
+        setTimeout(() => {
+          currentTab = "pick";
+          setTab("pick");
+          openOrder(next.OrderNumber);
+        }, 180);
+        return true;
+      }
+
+      setTimeout(() => {
+        closeOrderModal_(false);
+        document.getElementById("hint").textContent = "✅ Geen volgende PICK order.";
+      }, 180);
+      return false;
+    }catch(e){
+      return false;
+    }
   }
 
   async function markCurrentOrderReturned_(){
@@ -2592,8 +2823,9 @@
     }
   };
 
-  document.getElementById("closeOrder").onclick = () => orderModal.classList.remove("show");
-  orderModal.addEventListener("click", e => { if (e.target === orderModal) orderModal.classList.remove("show"); });
+  document.getElementById("closeOrder").onclick = () => closeOrderModal_(false);
+  window.addEventListener("popstate", () => { if (orderModalHistoryOpen) closeOrderModal_(true); });
+  orderModal.addEventListener("click", e => { if (e.target === orderModal) closeOrderModal_(false); });
 
   document.getElementById("tabPick").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("pick"); });
   document.getElementById("tabReady").addEventListener("click", ev => { ev.preventDefault(); onTabSwitch_("ready"); });
@@ -2788,6 +3020,14 @@
     }catch(e){
       if (resEl) resEl.textContent = "❌ " + (e.message || String(e));
     }
+  };
+
+  document.getElementById("btnStickyReady").onclick = async () => {
+    document.getElementById("btnMarkReady").click();
+  };
+
+  document.getElementById("btnStickyClose").onclick = () => {
+    closeOrderModal_(false);
   };
 
   document.getElementById("btnMarkReady").onclick = async () => {
