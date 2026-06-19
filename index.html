@@ -411,6 +411,54 @@
       .pickStickySub{display:none;}
     }
 
+
+    .bulkPickItem{
+      display:flex;
+      gap:10px;
+      border:1px solid #eee;
+      border-radius:12px;
+      padding:10px;
+      background:#fff;
+      align-items:flex-start;
+    }
+    .bulkPickItem.done{
+      opacity:.58;
+      background:#f8fafc;
+    }
+    .bulkPickCb{
+      width:22px;
+      height:22px;
+      margin-top:6px;
+      flex:0 0 auto;
+    }
+    .bulkPickQty{
+      min-width:54px;
+      padding:8px 10px;
+      border-radius:999px;
+      background:#dc2626;
+      color:#fff;
+      font-size:18px;
+      font-weight:950;
+      text-align:center;
+      flex:0 0 auto;
+    }
+    .bulkPickInfo{flex:1;min-width:0;}
+    .bulkPickName{font-size:15px;font-weight:950;line-height:1.2;}
+    .bulkPickOpts{font-size:12px;color:var(--wa-muted);margin-top:3px;}
+    .bulkPickRefs{font-size:11px;color:var(--wa-muted);margin-top:6px;line-height:1.35;}
+    .bulkPickTop{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:10px;
+      padding:10px;
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:12px;
+      background:rgba(255,255,255,.72);
+    }
+    .bulkPickProgress{font-weight:950;}
+
 </style>
 </head>
 <body>
@@ -434,6 +482,10 @@
 
   <div class="wrap">
     <div class="muted" id="hint"></div>
+    <div id="bulkPickBar" style="display:none;margin:10px 0;">
+      <button class="btn" id="btnBulkPickList">Open Bulk Pick List</button>
+      <span class="muted" style="margin-left:8px;">Experimental</span>
+    </div>
     <div class="readyFilters" id="readyFilters">
       <button class="filterBtn active" data-ready-filter="all">All <span id="rfAll">0</span></button>
       <button class="filterBtn" data-ready-filter="today">Today <span id="rfToday">0</span></button>
@@ -469,6 +521,18 @@
             <div class="muted" style="margin-top:6px;">Plak de Apps Script Web App /exec URL hier.</div>
           </div>
         </div>
+        
+        <div class="kv" style="margin-top:12px;">
+          <div class="muted">Experimental</div>
+          <div>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:900;">
+              <input type="checkbox" id="bulkPickEnabled" />
+              Enable Bulk Pick List
+            </label>
+            <div class="muted" style="margin-top:6px;">Shows a button on PICK to open one aggregated list for all orders that need picking.</div>
+          </div>
+        </div>
+
         <div style="margin-top:10px; display:flex; gap:8px;">
           <button class="btn" id="btnTestPing">Test ping</button>
           <button class="btn" id="btnSaveApi">Save</button>
@@ -488,6 +552,22 @@
         <button class="close" id="btnCloseCourierSummary">Close</button>
       </div>
       <div id="courierSummaryBody" style="padding:14px 0;"></div>
+    </div>
+  </div>
+
+  <div class="modalBackdrop" id="bulkPickModal">
+    <div class="sheet">
+      <div class="row">
+        <div>
+          <h2>Bulk Pick List</h2>
+          <div class="muted" id="bulkPickSummary">Aggregated PICK items</div>
+        </div>
+        <button class="close" id="closeBulkPick">Close</button>
+      </div>
+
+      <div class="sec">
+        <div class="items" id="bulkPickItems"></div>
+      </div>
     </div>
   </div>
 
@@ -541,6 +621,7 @@
 
 <script>
   const LS_KEY = "pq_api_base_v2";
+  const BULK_PICK_ENABLED_KEY = "pq_bulk_pick_enabled_v1";
   const DEBUG = /(?:\?|&)debug=1(?:&|$)/.test(location.search);
   const TABS = ["pick","ready","dispatch","return","handled","couriers"];
   const ACTION_BY_TAB = {
@@ -579,6 +660,16 @@
   const BACKGROUND_SYNC_MS = 60000;
   let backgroundSyncTimer = null;
   let backgroundSyncRunning = false;
+
+
+  function isBulkPickEnabled_(){
+    return localStorage.getItem(BULK_PICK_ENABLED_KEY) === "1";
+  }
+
+  function setBulkPickEnabled_(enabled){
+    localStorage.setItem(BULK_PICK_ENABLED_KEY, enabled ? "1" : "0");
+    updateBulkPickVisibility_();
+  }
 
   function getApiBase(){
     return (localStorage.getItem(LS_KEY) || localStorage.getItem("pq_api_base_v1") || "").trim();
@@ -1290,6 +1381,144 @@
   }
 
 
+
+  function updateBulkPickVisibility_(){
+    const bar = document.getElementById("bulkPickBar");
+    if (!bar) return;
+    bar.style.display = (currentTab === "pick" && isBulkPickEnabled_()) ? "block" : "none";
+  }
+
+  function itemKeyForBulkPick_(it){
+    const name = String(it && it.name || "").trim();
+    const opts = formatOptions(it && it.options);
+    return name + "||" + opts;
+  }
+
+  function aggregateBulkPickItems_(orders){
+    const map = {};
+    (orders || []).forEach(o => {
+      const orderNumber = String(o && o.OrderNumber || "").trim();
+      const items = Array.isArray(o && o.Items) ? o.Items : [];
+      items.forEach(it => {
+        const key = itemKeyForBulkPick_(it);
+        const qty = Number(it && it.qty || 1);
+        if (!map[key]) {
+          map[key] = {
+            name: String(it && it.name || "").trim(),
+            options: formatOptions(it && it.options),
+            qty: 0,
+            orders: []
+          };
+        }
+        map[key].qty += qty;
+        map[key].orders.push({ orderNumber, qty });
+      });
+    });
+
+    return Object.keys(map).map(k => map[k]).sort((a,b) => {
+      const nameCompare = String(a.name || "").localeCompare(String(b.name || ""));
+      if (nameCompare !== 0) return nameCompare;
+      return String(a.options || "").localeCompare(String(b.options || ""));
+    });
+  }
+
+  function renderBulkPickModal_(orders){
+    const wrap = document.getElementById("bulkPickItems");
+    const summary = document.getElementById("bulkPickSummary");
+    if (!wrap) return;
+
+    const list = aggregateBulkPickItems_(orders);
+    const orderCount = (orders || []).length;
+    const unitCount = list.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+
+    if (summary) summary.textContent = orderCount + " order(s) • " + unitCount + " total unit(s) • " + list.length + " unique item(s)";
+
+    wrap.innerHTML = "";
+
+    const top = document.createElement("div");
+    top.className = "bulkPickTop";
+    top.innerHTML = `
+      <div>
+        <div class="bulkPickProgress" id="bulkPickProgress">Picked 0 / ${escapeHtml(list.length)}</div>
+        <div class="muted">Check aggregated items as you pick them.</div>
+      </div>
+      <button class="btn" id="btnBulkPickCloseTop">Done</button>
+    `;
+    wrap.appendChild(top);
+
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.className = "muted";
+      empty.textContent = "Geen PICK items.";
+      wrap.appendChild(empty);
+      document.getElementById("btnBulkPickCloseTop").onclick = () => closeBulkPickModal_();
+      return;
+    }
+
+    function updateProgress_(){
+      const boxes = Array.from(wrap.querySelectorAll(".bulkPickCb"));
+      const done = boxes.filter(b => b.checked).length;
+      const el = document.getElementById("bulkPickProgress");
+      if (el) el.textContent = "Picked " + done + " / " + boxes.length;
+    }
+
+    list.forEach(it => {
+      const row = document.createElement("div");
+      row.className = "bulkPickItem";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "bulkPickCb";
+      cb.onchange = () => {
+        row.classList.toggle("done", cb.checked);
+        updateProgress_();
+      };
+
+      const qty = document.createElement("div");
+      qty.className = "bulkPickQty";
+      qty.textContent = it.qty + "x";
+
+      const info = document.createElement("div");
+      info.className = "bulkPickInfo";
+
+      const refs = it.orders.map(o => escapeHtml(o.orderNumber) + " (" + escapeHtml(o.qty) + "x)").join(", ");
+
+      info.innerHTML = `
+        <div class="bulkPickName">${escapeHtml(it.name || "")}</div>
+        ${it.options ? `<div class="bulkPickOpts">${escapeHtml(it.options)}</div>` : ""}
+        <div class="bulkPickRefs">Orders: ${refs}</div>
+      `;
+
+      row.appendChild(cb);
+      row.appendChild(qty);
+      row.appendChild(info);
+      wrap.appendChild(row);
+    });
+
+    const closeTop = document.getElementById("btnBulkPickCloseTop");
+    if (closeTop) closeTop.onclick = () => closeBulkPickModal_();
+    updateProgress_();
+  }
+
+  function openBulkPickList_(){
+    const orders = filterOrders_(pools.pick || []).filter(o => normWorkflow_(o && o.WorkflowStatus) === "PICK");
+    if (!orders.length) {
+      alert("Geen PICK orders om een bulk pick list te genereren.");
+      return;
+    }
+
+    renderBulkPickModal_(orders);
+
+    const modal = document.getElementById("bulkPickModal");
+    if (modal) modal.classList.add("show");
+  }
+
+  function closeBulkPickModal_(){
+    const modal = document.getElementById("bulkPickModal");
+    if (modal) modal.classList.remove("show");
+  }
+
+
   function renderCurrent_(){
     const tab = currentTab;
     showTabContainers_(tab);
@@ -1312,6 +1541,7 @@
       renderDispatchCourierFilters_();
       syncDispatchFilterActiveButtons_();
     }
+    updateBulkPickVisibility_();
     setDebug_(`tab=${tab} • total=${orders.length} • q="${searchQuery}"`);
   }
 
@@ -1455,6 +1685,7 @@
     const df = document.getElementById("dispatchFilters");
     if (df) df.style.display = currentTab === "dispatch" ? "flex" : "none";
     if (currentTab === "ready") updateReadyFilterCounts_();
+    updateBulkPickVisibility_();
     if (currentTab === "dispatch") {
       updateDispatchFilterCounts_();
       renderDispatchCourierFilters_();
@@ -2796,12 +3027,21 @@
 
   document.getElementById("btnSettings").onclick = () => {
     document.getElementById("apiBase").value = getApiBase();
+    const bulkPickEnabled = document.getElementById("bulkPickEnabled");
+    if (bulkPickEnabled) bulkPickEnabled.checked = isBulkPickEnabled_();
     document.getElementById("pingResult").textContent = "";
     settingsModal.classList.add("show");
   };
 
   document.getElementById("closeSettings").onclick = () => settingsModal.classList.remove("show");
   settingsModal.addEventListener("click", e => { if (e.target === settingsModal) settingsModal.classList.remove("show"); });
+
+  const bulkPickEnabled = document.getElementById("bulkPickEnabled");
+  if (bulkPickEnabled) {
+    bulkPickEnabled.addEventListener("change", () => {
+      setBulkPickEnabled_(bulkPickEnabled.checked);
+    });
+  }
 
   document.getElementById("btnSaveApi").onclick = async () => {
     setApiBase(document.getElementById("apiBase").value);
@@ -2970,6 +3210,19 @@
       if (ev.target && ev.target.id === "courierSummaryModal") closeCourierSummary_();
     });
   }
+
+  const closeBulkPickBtn = document.getElementById("closeBulkPick");
+  if (closeBulkPickBtn) closeBulkPickBtn.onclick = () => closeBulkPickModal_();
+
+  const bulkPickModal = document.getElementById("bulkPickModal");
+  if (bulkPickModal) {
+    bulkPickModal.addEventListener("click", e => {
+      if (e.target === bulkPickModal) closeBulkPickModal_();
+    });
+  }
+
+  const btnBulkPickList = document.getElementById("btnBulkPickList");
+  if (btnBulkPickList) btnBulkPickList.onclick = () => openBulkPickList_();
 
   document.getElementById("btnRefresh").onclick = async () => {
     dirty[currentTab] = true;
