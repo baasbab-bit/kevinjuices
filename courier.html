@@ -31,6 +31,12 @@
     .grow{flex:1;}
     .muted{font-size:12px;color:var(--muted);}
     header .muted{color:rgba(255,255,255,.88);font-weight:800;}
+    header .btn{
+      background:#fff;
+      border-color:rgba(255,255,255,.75);
+      color:#0b1b14;
+      box-shadow:0 2px 8px rgba(0,0,0,.12);
+    }
     .wrap{padding:12px;max-width:760px;margin:0 auto;}
     .card{
       background:var(--card);border:1px solid var(--border);border-radius:18px;
@@ -80,6 +86,22 @@
     .pill.warn{border-color:rgba(255,194,66,.45);background:rgba(255,194,66,.14);color:#9a3412;}
     .pill.bad{border-color:rgba(231,76,60,.40);background:rgba(231,76,60,.12);color:#991b1b;}
     .quickActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+    .quickActions .btn{
+      flex-direction:column;
+      gap:4px;
+      min-height:72px;
+      font-size:12px;
+      line-height:1.1;
+    }
+    .quickIcon{
+      font-size:24px;
+      line-height:1;
+      display:block;
+    }
+    .quickLabel{
+      font-size:12px;
+      font-weight:950;
+    }
     .outcomeActions{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px;}
     .outcomeActions .btn{width:100%;font-size:15px;}
     .deliveryCard{padding:14px 14px 16px;}
@@ -237,6 +259,31 @@
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
   }
 
+
+  function courierWhatsAppMessage_(order){
+    const name = String(order && order.CustomerName || "").trim();
+    const orderNumber = String(order && order.OrderNumber || "").trim();
+    const amountDue = order && order.AmountDue !== "" && order.AmountDue !== null && order.AmountDue !== undefined
+      ? formatSRD(order.AmountDue)
+      : formatSRD(order && order.OrderTotalSRD);
+
+    return [
+      "Goedendag" + (name ? " " + name : "") + ",",
+      "",
+      "Uw bestelling #" + orderNumber + " is onderweg voor levering.",
+      "Openstaand bedrag: " + amountDue + ".",
+      "",
+      "Kunt u aangeven of u beschikbaar bent om de bestelling in ontvangst te nemen?"
+    ].join("\\n");
+  }
+
+  function whatsappHrefForOrder_(order){
+    const d = digitsOnly(order && order.CustomerPhone);
+    if (!d) return "#";
+    return "https://wa.me/" + d + "?text=" + encodeURIComponent(courierWhatsAppMessage_(order));
+  }
+
+
   function formatSRD(v){
     if (v === "" || v === null || v === undefined) return "SRD 0";
     const n = Number(v || 0);
@@ -363,9 +410,18 @@
         </div>
 
         <div class="quickActions">
-          <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}">Call</a>
-          <a class="btn blue" href="${escapeHtml(whatsappHref(o.CustomerPhone))}" target="_blank" rel="noopener">WhatsApp</a>
-          <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener">Navigate</a>
+          <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}">
+            <span class="quickIcon">📞</span>
+            <span class="quickLabel">Call</span>
+          </a>
+          <a class="btn blue" href="${escapeHtml(whatsappHrefForOrder_(o))}" target="_blank" rel="noopener">
+            <span class="quickIcon">💬</span>
+            <span class="quickLabel">WhatsApp</span>
+          </a>
+          <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener">
+            <span class="quickIcon">🧭</span>
+            <span class="quickLabel">Navigate</span>
+          </a>
         </div>
 
         <div class="outcomeActions">
