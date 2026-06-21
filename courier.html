@@ -15,58 +15,88 @@
       --text:#0b1b14;
       --muted:rgba(11,27,20,.62);
       --border:rgba(11,27,20,.10);
-      --shadow:0 6px 18px rgba(0,0,0,.06);
+      --shadow:0 8px 24px rgba(0,0,0,.08);
+      --danger:#dc2626;
+      --warn:#f97316;
+      --blue:#2563eb;
     }
+    *{box-sizing:border-box;}
     body{margin:0;background:var(--bg);color:var(--text);}
     header{
       position:sticky;top:0;z-index:20;
       background:linear-gradient(90deg,var(--header),var(--accent2));
-      color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+      color:#fff;padding:10px 12px;display:flex;gap:8px;align-items:center;
     }
-    h1{font-size:17px;margin:0;font-weight:950;}
+    h1{font-size:16px;margin:0;font-weight:950;}
     .grow{flex:1;}
     .muted{font-size:12px;color:var(--muted);}
-    header .muted{color:rgba(255,255,255,.85);}
-    .wrap{padding:14px;}
+    header .muted{color:rgba(255,255,255,.88);font-weight:800;}
+    .wrap{padding:12px;max-width:760px;margin:0 auto;}
     .card{
       background:var(--card);border:1px solid var(--border);border-radius:18px;
       box-shadow:var(--shadow);padding:14px;margin-bottom:12px;
     }
     .btn{
-      border:1px solid #ddd;background:#fff;padding:9px 11px;border-radius:12px;
-      cursor:pointer;font-weight:900;
+      border:1px solid #ddd;background:#fff;padding:10px 12px;border-radius:14px;
+      cursor:pointer;font-weight:950;font-size:14px;text-decoration:none;color:inherit;
+      display:inline-flex;align-items:center;justify-content:center;gap:6px;
+      min-height:44px;
     }
     .btn.primary{background:var(--accent);border-color:var(--accent);color:#0b2b22;}
+    .btn.blue{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;}
     .btn.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412;}
     .btn.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b;}
     .btn[disabled]{opacity:.5;cursor:not-allowed;}
     .input{
-      padding:9px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
-      width:100%;box-sizing:border-box;font-weight:800;
+      padding:11px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;
+      width:100%;font-weight:850;font-size:16px;min-height:46px;
     }
-    .loginGrid{display:grid;gap:8px;}
-    .row{display:flex;justify-content:space-between;gap:10px;align-items:center;}
-    .orderNo{font-weight:950;font-size:16px;}
-    .name{font-weight:900;margin-top:6px;}
-    .kv{display:grid;grid-template-columns:92px 1fr;gap:5px 10px;margin-top:10px;font-size:13px;}
-    .kv .k{color:var(--muted);font-weight:800;}
-    .actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px;}
+    .loginBox{display:grid;gap:10px;}
+    .loginTitle{font-size:20px;font-weight:950;margin:0 0 4px;}
+    .pinInput{text-align:center;letter-spacing:6px;font-size:24px;font-weight:950;}
+    .topLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .courierName{font-weight:950;font-size:15px;}
+    .orderNo{font-weight:950;font-size:18px;letter-spacing:.2px;}
+    .customer{font-weight:950;font-size:19px;margin-top:10px;line-height:1.15;}
+    .phone{font-weight:900;margin-top:4px;font-size:15px;}
+    .addressBox{
+      margin-top:12px;padding:12px;border-radius:14px;background:#f8fafc;
+      border:1px solid rgba(0,0,0,.07);
+    }
+    .addressMain{font-size:17px;font-weight:950;line-height:1.25;}
+    .addressSub{font-size:13px;color:var(--muted);font-weight:850;margin-top:4px;}
+    .dueBox{
+      margin-top:12px;border-radius:16px;padding:14px;background:#111827;color:#fff;
+      display:flex;justify-content:space-between;align-items:center;gap:10px;
+    }
+    .dueAmount{font-size:26px;font-weight:950;letter-spacing:.2px;}
+    .dueLabel{font-size:12px;font-weight:950;color:rgba(255,255,255,.78);text-transform:uppercase;}
     .pill{
       display:inline-flex;align-items:center;border:1px solid rgba(11,27,20,.12);
       padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.72);
-      font-size:12px;font-weight:900;margin-top:8px;
+      font-size:12px;font-weight:950;margin-top:8px;
     }
-    .pill.delivery{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.12);color:#1d4ed8;}
-    .pill.warn{border-color:rgba(255,194,66,.45);background:rgba(255,194,66,.14);}
-    .pill.ok{border-color:rgba(37,211,102,.35);background:rgba(37,211,102,.12);}
-    .pill.bad{border-color:rgba(231,76,60,.40);background:rgba(231,76,60,.12);}
-    .statusLine{font-weight:900;margin-top:8px;}
+    .pill.ok{border-color:rgba(37,211,102,.35);background:rgba(37,211,102,.12);color:#166534;}
+    .pill.warn{border-color:rgba(255,194,66,.45);background:rgba(255,194,66,.14);color:#9a3412;}
+    .pill.bad{border-color:rgba(231,76,60,.40);background:rgba(231,76,60,.12);color:#991b1b;}
+    .quickActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+    .outcomeActions{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px;}
+    .outcomeActions .btn{width:100%;font-size:15px;}
+    .deliveryCard{padding:14px 14px 16px;}
     .hidden{display:none!important;}
+    .settingsPanel{display:none;}
+    .settingsPanel.show{display:block;}
+    .empty{padding:24px;text-align:center;color:var(--muted);font-weight:900;}
     @media(min-width:720px){
       .orders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
       .card{margin-bottom:0;}
-      .actions{grid-template-columns:repeat(3,1fr);}
-      .loginGrid{grid-template-columns:1fr auto auto;align-items:end;}
+      .wrap{padding:16px;}
+    }
+    @media(max-width:480px){
+      header .muted{display:none;}
+      .quickActions{grid-template-columns:1fr 1fr 1fr;}
+      .btn{font-size:13px;padding:9px 8px;}
+      .dueAmount{font-size:24px;}
     }
   </style>
 </head>
@@ -80,45 +110,52 @@
 </header>
 
 <div class="wrap">
-  <div class="card" id="settingsCard" style="display:none;">
-    <div class="loginGrid">
+  <div class="card settingsPanel" id="settingsCard">
+    <div class="loginBox">
       <div>
         <div class="muted">API URL</div>
         <input class="input" id="apiBase" placeholder="https://script.google.com/macros/s/.../exec">
       </div>
-      <button class="btn primary" id="btnSaveApi">Save</button>
-      <button class="btn" id="btnPing">Test</button>
+      <button class="btn primary" id="btnSaveApi">Save API URL</button>
+      <button class="btn" id="btnPing">Test Connection</button>
+      <button class="btn bad" id="btnLogout">Logout / Switch Courier</button>
     </div>
     <div class="muted" id="settingsMsg" style="margin-top:8px;"></div>
   </div>
 
-  <div class="card">
-    <div class="loginGrid">
+  <div class="card" id="loginCard">
+    <div class="loginBox">
       <div>
-        <div class="muted">Select Courier</div>
-        <select class="input" id="courierSelect">
-          <option value="">Loading couriers…</option>
-        </select>
+        <h2 class="loginTitle">Courier Login</h2>
+        <div class="muted">Enter your courier PIN</div>
       </div>
-      <button class="btn primary" id="btnLogin">Open Deliveries</button>
+      <input class="input pinInput" id="pinInput" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="PIN">
+      <button class="btn primary" id="btnLogin">Login</button>
     </div>
-    <div style="margin-top:10px;">
-      <div class="muted">Delivery Note</div>
-      <input class="input" id="deliveryNote" placeholder="Optional note, e.g. delivered at gate / no answer / wrong address">
-    </div>
-    <div class="muted" id="hint" style="margin-top:8px;"></div>
+    <div class="muted" id="loginMsg" style="margin-top:8px;"></div>
   </div>
 
+  <div class="card hidden" id="sessionCard">
+    <div class="topLine">
+      <div>
+        <div class="muted">Logged in as</div>
+        <div class="courierName" id="sessionCourier">Courier</div>
+      </div>
+      <div class="grow"></div>
+      <div class="pill warn" id="deliveryCount">0 deliveries</div>
+    </div>
+  </div>
+
+  <div class="muted" id="hint" style="margin:8px 2px 10px;"></div>
   <div class="orders" id="orders"></div>
 </div>
 
 <script>
   // GitHub-hosted frontend. This page calls the Apps Script Web App API via JSONP.
   const LS_API = "pq_api_base_v2";
-  const LS_COURIER = "pq_courier_portal_selected_v1";
+  const LS_SESSION = "pq_courier_portal_session_v2";
 
-  let couriers = [];
-  let selectedCourierId = "";
+  let sessionCourier = null;
 
   function getApiBase(){
     return (localStorage.getItem(LS_API) || "").trim();
@@ -126,6 +163,21 @@
 
   function setApiBase(v){
     localStorage.setItem(LS_API, String(v || "").trim());
+  }
+
+  function saveSession(courier){
+    sessionCourier = courier || null;
+    if (sessionCourier) localStorage.setItem(LS_SESSION, JSON.stringify(sessionCourier));
+    else localStorage.removeItem(LS_SESSION);
+  }
+
+  function loadSession(){
+    try{
+      const raw = localStorage.getItem(LS_SESSION);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return obj && obj.CourierId ? obj : null;
+    }catch(e){ return null; }
   }
 
   function jsonp(url){
@@ -163,18 +215,41 @@
     }[m]));
   }
 
+  function digitsOnly(s){
+    return String(s || "").replace(/\D/g, "");
+  }
+
+  function phoneHref(phone){
+    const d = digitsOnly(phone);
+    if (!d) return "#";
+    return "tel:+" + d;
+  }
+
+  function whatsappHref(phone){
+    const d = digitsOnly(phone);
+    if (!d) return "#";
+    return "https://wa.me/" + d;
+  }
+
+  function mapsHref(address){
+    const q = String(address || "").trim();
+    if (!q) return "#";
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+  }
+
   function formatSRD(v){
-    if (v === "" || v === null || v === undefined) return "";
+    if (v === "" || v === null || v === undefined) return "SRD 0";
     const n = Number(v || 0);
     return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits:2, useGrouping:false });
   }
 
   function deliveryStatusLabel(s){
     const x = String(s || "").toUpperCase();
-    if (x === "DELIVERED_REPORTED") return "Delivered reported";
-    if (x === "FAILED_ATTEMPT") return "Failed attempt";
-    if (x === "CUSTOMER_NOT_HOME") return "Customer not home";
-    return x || "Assigned";
+    if (x === "DELIVERED_REPORTED") return "Delivered";
+    if (x === "FAILED_ATTEMPT") return "Failed Attempt";
+    if (x === "CUSTOMER_NOT_HOME") return "Customer Not Home";
+    if (x === "DISPATCHED_TO_COURIER") return "Assigned";
+    return "Assigned";
   }
 
   function statusKind(s){
@@ -188,6 +263,13 @@
     document.getElementById("hint").textContent = msg || "";
   }
 
+  function updateSessionUI(){
+    const loggedIn = !!(sessionCourier && sessionCourier.CourierId);
+    document.getElementById("loginCard").classList.toggle("hidden", loggedIn);
+    document.getElementById("sessionCard").classList.toggle("hidden", !loggedIn);
+    if (loggedIn) document.getElementById("sessionCourier").textContent = sessionCourier.Name || sessionCourier.CourierId;
+  }
+
   async function loadBuildInfo(){
     try{
       const res = await api("ping");
@@ -197,82 +279,99 @@
     }
   }
 
-  async function loadCouriers(){
-    const sel = document.getElementById("courierSelect");
-    sel.innerHTML = `<option value="">Loading couriers…</option>`;
+  async function loginWithPin(){
+    const pin = document.getElementById("pinInput").value.trim();
+    const msg = document.getElementById("loginMsg");
+    if (!pin) {
+      msg.textContent = "Enter your PIN.";
+      return;
+    }
 
-    const res = await api("getCouriers");
-    if (!res || !res.ok) throw new Error((res && res.error) || "Could not load couriers");
+    msg.textContent = "Logging in…";
+    const res = await api("courierLogin", { pin });
+    if (!res || !res.ok || !res.courier) {
+      msg.textContent = (res && res.error) || "Invalid PIN.";
+      return;
+    }
 
-    couriers = res.couriers || [];
-    const saved = localStorage.getItem(LS_COURIER) || "";
-
-    sel.innerHTML = `<option value="">Select courier…</option>`;
-    couriers.forEach(c => {
-      const id = String(c.CourierId || "").trim();
-      if (!id) return;
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = String(c.Name || id);
-      if (id === saved) opt.selected = true;
-      sel.appendChild(opt);
-    });
-
-    selectedCourierId = sel.value || "";
+    saveSession(res.courier);
+    document.getElementById("pinInput").value = "";
+    msg.textContent = "";
+    updateSessionUI();
+    await loadOrders();
   }
 
   async function loadOrders(){
-    selectedCourierId = document.getElementById("courierSelect").value || "";
-    if (!selectedCourierId) {
-      setHint("Select a courier first.");
+    if (!sessionCourier || !sessionCourier.CourierId) {
+      updateSessionUI();
+      setHint("Login with your PIN.");
       document.getElementById("orders").innerHTML = "";
       return;
     }
 
-    localStorage.setItem(LS_COURIER, selectedCourierId);
     setHint("Loading assigned deliveries…");
 
-    const res = await api("getCourierPortalOrders", { courierId:selectedCourierId });
+    const res = await api("getCourierPortalOrders", { courierId:sessionCourier.CourierId });
     if (!res || !res.ok) throw new Error((res && res.error) || "Could not load assigned deliveries");
 
-    renderOrders(res.orders || []);
-    setHint((res.orders || []).length ? "" : "No assigned deliveries.");
+    const orders = res.orders || [];
+    renderOrders(orders);
+    document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
+    setHint(orders.length ? "" : "No assigned deliveries.");
   }
 
   function renderOrders(orders){
     const wrap = document.getElementById("orders");
     wrap.innerHTML = "";
 
-    if (!orders.length) return;
+    if (!orders.length) {
+      wrap.innerHTML = `<div class="card empty">No assigned deliveries.</div>`;
+      return;
+    }
 
     orders.forEach(o => {
       const card = document.createElement("div");
-      card.className = "card";
+      card.className = "card deliveryCard";
 
       const address = [o.ShippingAddress, o.ShippingCity].filter(Boolean).join(", ");
+      const fullAddress = address || o.DeliveryArea || "";
       const due = o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined
-        ? formatSRD(o.AmountDue)
-        : "";
+        ? o.AmountDue
+        : o.OrderTotalSRD;
 
       card.innerHTML = `
-        <div class="row">
-          <div class="orderNo">${escapeHtml(o.OrderNumber)}</div>
-          <span class="pill delivery">${escapeHtml(o.CourierName || "Assigned")}</span>
-        </div>
-        <div class="name">${escapeHtml(o.CustomerName || "")}</div>
-        <div class="kv">
-          <div class="k">Phone</div><div>${escapeHtml(o.CustomerPhone || "")}</div>
-          <div class="k">Address</div><div>${escapeHtml(address || o.DeliveryArea || "")}</div>
-          <div class="k">Area</div><div>${escapeHtml(o.DeliveryArea || "")}</div>
-          <div class="k">Amount Due</div><div style="font-weight:950;">${escapeHtml(due)}</div>
-        </div>
-        <div class="statusLine">
+        <div class="topLine">
+          <div class="orderNo">Order ${escapeHtml(o.OrderNumber)}</div>
+          <div class="grow"></div>
           <span class="pill ${statusKind(o.DeliveryStatus)}">${escapeHtml(deliveryStatusLabel(o.DeliveryStatus))}</span>
         </div>
-        <div class="actions">
-          <button class="btn primary" data-status="DELIVERED_REPORTED">Delivered</button>
-          <button class="btn warn" data-status="FAILED_ATTEMPT">Failed Attempt</button>
-          <button class="btn bad" data-status="CUSTOMER_NOT_HOME">Customer Not Home</button>
+
+        <div class="customer">${escapeHtml(o.CustomerName || "")}</div>
+        <div class="phone">${escapeHtml(o.CustomerPhone || "")}</div>
+
+        <div class="dueBox">
+          <div>
+            <div class="dueAmount">${escapeHtml(formatSRD(due))}</div>
+            <div class="dueLabel">Amount Due</div>
+          </div>
+          <div class="dueLabel">${escapeHtml(o.PaymentStatus || "")}</div>
+        </div>
+
+        <div class="addressBox">
+          <div class="addressMain">${escapeHtml(o.ShippingAddress || o.DeliveryArea || "")}</div>
+          <div class="addressSub">${escapeHtml(o.ShippingCity || o.DeliveryArea || "")}</div>
+        </div>
+
+        <div class="quickActions">
+          <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}">Call</a>
+          <a class="btn blue" href="${escapeHtml(whatsappHref(o.CustomerPhone))}" target="_blank" rel="noopener">WhatsApp</a>
+          <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener">Navigate</a>
+        </div>
+
+        <div class="outcomeActions">
+          <button class="btn primary" data-status="DELIVERED_REPORTED">DELIVERED</button>
+          <button class="btn bad" data-status="CUSTOMER_NOT_HOME">CUSTOMER NOT HOME</button>
+          <button class="btn warn" data-status="FAILED_ATTEMPT">FAILED ATTEMPT</button>
         </div>
       `;
 
@@ -285,18 +384,17 @@
   }
 
   async function updateDeliveryStatus(orderNumber, status, btn){
-    if (!selectedCourierId) return;
+    if (!sessionCourier || !sessionCourier.CourierId) return;
+
     const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = "Saving…";
 
     try{
-      const noteEl = document.getElementById("deliveryNote");
       const res = await api("setCourierDeliveryStatus", {
         orderNumber,
-        courierId:selectedCourierId,
-        deliveryStatus:status,
-        note: noteEl ? noteEl.value : ""
+        courierId:sessionCourier.CourierId,
+        deliveryStatus:status
       });
       if (!res || !res.ok) throw new Error((res && res.error) || "Save failed");
       await loadOrders();
@@ -310,16 +408,17 @@
 
   async function init(){
     document.getElementById("apiBase").value = getApiBase();
+
     document.getElementById("btnSettings").onclick = () => {
-      const el = document.getElementById("settingsCard");
-      el.style.display = el.style.display === "none" ? "block" : "none";
+      document.getElementById("settingsCard").classList.toggle("show");
     };
+
     document.getElementById("btnSaveApi").onclick = () => {
       setApiBase(document.getElementById("apiBase").value);
       document.getElementById("settingsMsg").textContent = "Saved.";
       loadBuildInfo();
-      loadCouriers().catch(e => setHint(e.message || String(e)));
     };
+
     document.getElementById("btnPing").onclick = async () => {
       try{
         const res = await api("ping");
@@ -328,20 +427,44 @@
         document.getElementById("settingsMsg").textContent = e.message || String(e);
       }
     };
-    document.getElementById("btnLogin").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
-    document.getElementById("btnRefresh").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
-    document.getElementById("courierSelect").onchange = () => {
-      selectedCourierId = document.getElementById("courierSelect").value || "";
-      localStorage.setItem(LS_COURIER, selectedCourierId);
+
+    document.getElementById("btnLogout").onclick = () => {
+      saveSession(null);
+      updateSessionUI();
+      document.getElementById("orders").innerHTML = "";
+      document.getElementById("deliveryCount").textContent = "0 deliveries";
+      setHint("Logged out. Enter courier PIN.");
+      document.getElementById("loginCard").classList.remove("hidden");
     };
 
+    document.getElementById("btnLogin").onclick = () => loginWithPin().catch(e => {
+      document.getElementById("loginMsg").textContent = e.message || String(e);
+    });
+
+    document.getElementById("pinInput").addEventListener("keydown", ev => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        loginWithPin().catch(e => {
+          document.getElementById("loginMsg").textContent = e.message || String(e);
+        });
+      }
+    });
+
+    document.getElementById("btnRefresh").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
+
     await loadBuildInfo();
-    try{
-      await loadCouriers();
-      if (selectedCourierId) await loadOrders();
-    }catch(e){
-      setHint(e.message || String(e));
-      document.getElementById("settingsCard").style.display = "block";
+
+    sessionCourier = loadSession();
+    updateSessionUI();
+
+    if (sessionCourier && sessionCourier.CourierId) {
+      try{ await loadOrders(); }
+      catch(e){ setHint(e.message || String(e)); }
+    } else if (!getApiBase()) {
+      document.getElementById("settingsCard").classList.add("show");
+      setHint("Set API URL first.");
+    } else {
+      setHint("Login with courier PIN.");
     }
   }
 
