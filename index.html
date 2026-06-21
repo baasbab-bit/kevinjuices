@@ -653,9 +653,12 @@
   const detailCache = new Map();
   const failedActions = {}; // sessionStorage-backed: orderNumber -> {type,message,time}
   const pendingCourierAssignments = {}; // sessionStorage-backed: orderNumber -> courier assignment patch
+  const pendingPickMoves = {}; // localStorage-backed: orderNumber -> pending PICK => READY/DISPATCH move
   const FAILED_ACTIONS_SS_KEY = "pq_failed_actions_v1";
   const PENDING_COURIER_SS_KEY = "pq_pending_courier_assignments_v1";
+  const PENDING_PICK_MOVES_SS_KEY = "pq_pending_pick_moves_v1";
   const DETAIL_CACHE_SS_KEY = "pq_detail_cache_v2";
+  const PICK_PROGRESS_LS_KEY = "pq_local_pick_progress_v1";
   const DETAIL_PREFETCH_LIMIT = 8;
   const BACKGROUND_SYNC_MS = 60000;
   let backgroundSyncTimer = null;
@@ -1032,6 +1035,83 @@
   }
 
 
+  function savePendingPickMovesToStorage_(){
+    try { localStorage.setItem(PENDING_PICK_MOVES_SS_KEY, JSON.stringify(pendingPickMoves)); } catch(e){}
+  }
+
+  function loadPendingPickMovesFromStorage_(){
+    try{
+      const raw = localStorage.getItem(PENDING_PICK_MOVES_SS_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj !== "object") return;
+      Object.keys(obj).forEach(k => { pendingPickMoves[k] = obj[k]; });
+    }catch(e){}
+  }
+
+  function setPendingPickMove_(orderNumber, move){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return;
+    pendingPickMoves[ord] = Object.assign({}, move || {}, {
+      OrderNumber: ord,
+      status: (move && move.status) || "PENDING",
+      updatedAt: new Date().toISOString()
+    });
+    savePendingPickMovesToStorage_();
+  }
+
+  function clearPendingPickMove_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (ord && pendingPickMoves[ord]) {
+      delete pendingPickMoves[ord];
+      savePendingPickMovesToStorage_();
+    }
+  }
+
+  function getPendingPickMove_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    return ord ? (pendingPickMoves[ord] || null) : null;
+  }
+
+  function pendingPickMoveTargetTab_(move){
+    const wf = normWorkflow_(move && move.targetWorkflow);
+    if (wf === "DISPATCH") return "dispatch";
+    if (wf === "READY") return "ready";
+    return "";
+  }
+
+  function pendingPickMoveOrderFromCache_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    const move = getPendingPickMove_(ord);
+    if (!ord || !move) return null;
+
+    const targetWorkflow = normWorkflow_(move.targetWorkflow);
+    const cached = detailCache.get(ord) || {};
+    const patch = Object.assign({}, cached, move.patch || {}, {
+      OrderNumber: ord,
+      WorkflowStatus: targetWorkflow,
+      PickComplete: true,
+      PickChecks: Array.isArray(move.pickChecks) ? move.pickChecks : (cached.PickChecks || []),
+      SaveFailed: move.status === "FAILED",
+      PendingPickMove: move.status !== "FAILED",
+      DetailPreloaded: true
+    });
+
+    if (!patch.CustomerName) patch.CustomerName = "Pending save - open to retry";
+    if (!patch.Items) patch.Items = [];
+
+    return patch;
+  }
+
+  function pendingPickMoveNumbersForTab_(tab){
+    return Object.keys(pendingPickMoves).filter(on => pendingPickMoveTargetTab_(pendingPickMoves[on]) === tab);
+  }
+
+  function pendingPickMoveNumbers_(){
+    return Object.keys(pendingPickMoves);
+  }
+
+
   function isReadySaveFailed_(orderNumber){
     const f = getFailedAction_(orderNumber);
     return !!(f && (f.type === "READY_SAVE_FAILED" || f.type === "DISPATCH_SAVE_FAILED"));
@@ -1042,11 +1122,17 @@
     const ord = String(orderNumber || "").trim();
     if (!ord) return null;
 
+    const pending = pendingPickMoveOrderFromCache_(ord);
+    if (pending) return Object.assign({}, pending, { SaveFailed: true, PendingPickMove: false });
+
+    const f = getFailedAction_(ord);
+    const targetWorkflow = f && f.type === "DISPATCH_SAVE_FAILED" ? "DISPATCH" : "READY";
+
     const cached = detailCache.get(ord);
     if (cached) {
       return Object.assign({}, cached, {
         OrderNumber: ord,
-        WorkflowStatus: "READY",
+        WorkflowStatus: targetWorkflow,
         SaveFailed: true,
         DetailPreloaded: true
       });
@@ -1056,8 +1142,9 @@
       OrderNumber: ord,
       CustomerName: "Save failed - open to retry",
       OrderTotalSRD: 0,
-      WorkflowStatus: "READY",
-      ReadyAt: new Date().toISOString(),
+      WorkflowStatus: targetWorkflow,
+      ReadyAt: targetWorkflow === "READY" ? new Date().toISOString() : "",
+      DispatchAt: targetWorkflow === "DISPATCH" ? new Date().toISOString() : "",
       SaveFailed: true,
       DetailPreloaded: false,
       Items: [],
@@ -1207,6 +1294,8 @@
       if (failedAction) {
         pills.appendChild(pill("Save failed", "bad"));
         pills.appendChild(pill("Tap to retry", "bad"));
+      } else if (o.PendingPickMove) {
+        pills.appendChild(pill("Save pending", "warn"));
       }
       const hasMultiQty = Array.isArray(o.Items) && o.Items.some(it => Number(it && it.qty || 1) > 1);
       if (hasMultiQty) pills.appendChild(pill("⚠ Meerdere stuks", "bad"));
@@ -1565,30 +1654,56 @@
       if (!res || !res.ok) throw new Error((res && res.error) || "API error (" + ACTION_BY_TAB[tab] + ")");
       let incoming = sortNewestFirst_(applyPendingCourierAssignmentsToOrders_(res.orders || []), tab);
 
-      // Failed READY saves must stay visually in Ready after refresh, even if sheet still says PICK.
+      // Pending PICK moves must never silently reappear in PICK after refresh.
+      const pendingMove = {};
+      pendingPickMoveNumbers_().forEach(on => { pendingMove[on] = true; });
+
       const failedReady = {};
       failedReadyOrderNumbers_().forEach(on => { failedReady[on] = true; });
 
       if (tab === "pick") {
-        incoming = incoming.filter(o => !failedReady[String(o && o.OrderNumber || "").trim()]);
+        incoming = incoming.filter(o => {
+          const on = String(o && o.OrderNumber || "").trim();
+          return !failedReady[on] && !pendingMove[on];
+        });
       }
 
-      if (tab === "ready") {
+      if (tab === "ready" || tab === "dispatch") {
         const incomingKeys = {};
         incoming.forEach(o => { incomingKeys[String(o && o.OrderNumber || "").trim()] = true; });
 
-        // Preserve live local ready failed orders.
-        (pools.ready || []).forEach(localOrder => {
+        (pools[tab] || []).forEach(localOrder => {
           const on = String(localOrder && localOrder.OrderNumber || "").trim();
-          if (on && failedReady[on] && !incomingKeys[on]) {
+          if (!on || incomingKeys[on]) return;
+
+          const move = getPendingPickMove_(on);
+          const f = getFailedAction_(on);
+          const belongsByPending = move && pendingPickMoveTargetTab_(move) === tab;
+          const belongsByFailed = f && (
+            (tab === "ready" && f.type === "READY_SAVE_FAILED") ||
+            (tab === "dispatch" && f.type === "DISPATCH_SAVE_FAILED")
+          );
+
+          if (belongsByPending || belongsByFailed) {
             incoming.unshift(localOrder);
             incomingKeys[on] = true;
           }
         });
 
-        // Also restore failed ready orders from session/detail cache after page refresh.
-        failedReadyOrderNumbers_().forEach(on => {
+        pendingPickMoveNumbersForTab_(tab).forEach(on => {
           if (!incomingKeys[on]) {
+            const restored = pendingPickMoveOrderFromCache_(on);
+            if (restored) {
+              incoming.unshift(restored);
+              incomingKeys[on] = true;
+            }
+          }
+        });
+
+        failedReadyOrderNumbers_().forEach(on => {
+          const f = getFailedAction_(on);
+          const failedTab = f && f.type === "DISPATCH_SAVE_FAILED" ? "dispatch" : "ready";
+          if (failedTab === tab && !incomingKeys[on]) {
             const restored = failedReadyOrderFromCache_(on);
             if (restored) {
               incoming.unshift(restored);
@@ -1720,30 +1835,56 @@
 
       let incoming = sortNewestFirst_(applyPendingCourierAssignmentsToOrders_(res.orders || []), tab);
 
-      // Failed READY saves must stay visually in Ready after refresh, even if sheet still says PICK.
+      // Pending PICK moves must never silently reappear in PICK after refresh.
+      const pendingMove = {};
+      pendingPickMoveNumbers_().forEach(on => { pendingMove[on] = true; });
+
       const failedReady = {};
       failedReadyOrderNumbers_().forEach(on => { failedReady[on] = true; });
 
       if (tab === "pick") {
-        incoming = incoming.filter(o => !failedReady[String(o && o.OrderNumber || "").trim()]);
+        incoming = incoming.filter(o => {
+          const on = String(o && o.OrderNumber || "").trim();
+          return !failedReady[on] && !pendingMove[on];
+        });
       }
 
-      if (tab === "ready") {
+      if (tab === "ready" || tab === "dispatch") {
         const incomingKeys = {};
         incoming.forEach(o => { incomingKeys[String(o && o.OrderNumber || "").trim()] = true; });
 
-        // Preserve live local ready failed orders.
-        (pools.ready || []).forEach(localOrder => {
+        (pools[tab] || []).forEach(localOrder => {
           const on = String(localOrder && localOrder.OrderNumber || "").trim();
-          if (on && failedReady[on] && !incomingKeys[on]) {
+          if (!on || incomingKeys[on]) return;
+
+          const move = getPendingPickMove_(on);
+          const f = getFailedAction_(on);
+          const belongsByPending = move && pendingPickMoveTargetTab_(move) === tab;
+          const belongsByFailed = f && (
+            (tab === "ready" && f.type === "READY_SAVE_FAILED") ||
+            (tab === "dispatch" && f.type === "DISPATCH_SAVE_FAILED")
+          );
+
+          if (belongsByPending || belongsByFailed) {
             incoming.unshift(localOrder);
             incomingKeys[on] = true;
           }
         });
 
-        // Also restore failed ready orders from session/detail cache after page refresh.
-        failedReadyOrderNumbers_().forEach(on => {
+        pendingPickMoveNumbersForTab_(tab).forEach(on => {
           if (!incomingKeys[on]) {
+            const restored = pendingPickMoveOrderFromCache_(on);
+            if (restored) {
+              incoming.unshift(restored);
+              incomingKeys[on] = true;
+            }
+          }
+        });
+
+        failedReadyOrderNumbers_().forEach(on => {
+          const f = getFailedAction_(on);
+          const failedTab = f && f.type === "DISPATCH_SAVE_FAILED" ? "dispatch" : "ready";
+          if (failedTab === tab && !incomingKeys[on]) {
             const restored = failedReadyOrderFromCache_(on);
             if (restored) {
               incoming.unshift(restored);
@@ -1832,6 +1973,51 @@
   function firstImageUrl(it){
     return it.thumbUrl || it.imageUrl || (Array.isArray(it.altImageUrls) ? it.altImageUrls[0] : "") || "";
   }
+
+
+  function loadLocalPickProgressMap_(){
+    try{
+      const raw = localStorage.getItem(PICK_PROGRESS_LS_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === "object" ? obj : {};
+    }catch(e){
+      return {};
+    }
+  }
+
+  function saveLocalPickProgressMap_(map){
+    try{ localStorage.setItem(PICK_PROGRESS_LS_KEY, JSON.stringify(map || {})); }catch(e){}
+  }
+
+  function getLocalPickProgress_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return null;
+    const map = loadLocalPickProgressMap_();
+    return map[ord] || null;
+  }
+
+  function setLocalPickProgress_(orderNumber, checks){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return;
+    const map = loadLocalPickProgressMap_();
+    map[ord] = {
+      checks: Array.isArray(checks) ? checks.map(Boolean) : [],
+      updatedAt: new Date().toISOString()
+    };
+    saveLocalPickProgressMap_(map);
+  }
+
+  function clearLocalPickProgress_(orderNumber){
+    const ord = String(orderNumber || "").trim();
+    if (!ord) return;
+    const map = loadLocalPickProgressMap_();
+    if (map[ord]) {
+      delete map[ord];
+      saveLocalPickProgressMap_(map);
+    }
+  }
+
 
   function normalizePickChecks_(items, checks){
     const n = Array.isArray(items) ? items.length : 0;
@@ -2511,7 +2697,14 @@
 
   function initPickState_(orderObj){
     const items = Array.isArray(orderObj && orderObj.Items) ? orderObj.Items : [];
-    pickChecks = normalizePickChecks_(items, orderObj && orderObj.PickChecks);
+    const localProgress = orderObj && normWorkflow_(orderObj.WorkflowStatus) === "PICK"
+      ? getLocalPickProgress_(orderObj.OrderNumber)
+      : null;
+
+    pickChecks = localProgress && Array.isArray(localProgress.checks)
+      ? normalizePickChecks_(items, localProgress.checks)
+      : normalizePickChecks_(items, orderObj && orderObj.PickChecks);
+
     if (orderObj) orderObj.PickChecks = pickChecks;
     updatePickUI_();
   }
@@ -2655,7 +2848,10 @@
         const pc = computePickComplete_(pickChecks);
         currentOrder.PickComplete = pc;
 
-        // Local-only while picking. We save once when Markeer als Ready is clicked.
+        // Local-only while picking. Persist progress locally; server save happens once when Markeer als Ready is clicked.
+        if (currentOrder && normWorkflow_(currentOrder.WorkflowStatus) === "PICK") {
+          setLocalPickProgress_(currentOrder.OrderNumber, pickChecks);
+        }
         updatePickUI_();
         updateOrderInCaches_(String(currentOrder.OrderNumber || "").trim(), { PickChecks: pickChecks, PickComplete: pc });
         renderCurrent_();
@@ -2756,7 +2952,17 @@
     if (targetWorkflow === "READY") patch.ReadyAt = now;
     if (targetWorkflow === "DISPATCH") patch.DispatchAt = now;
 
-    moveOrderBetweenPools_(orderNumber, targetTab, patch);
+    setPendingPickMove_(orderNumber, {
+      targetWorkflow,
+      targetTab,
+      pickChecks: pickChecks.slice(),
+      patch,
+      status: "PENDING",
+      createdAt: now
+    });
+    clearLocalPickProgress_(orderNumber);
+
+    moveOrderBetweenPools_(orderNumber, targetTab, Object.assign({}, patch, { PendingPickMove: true }));
 
     if (startedFromWorkflow === "PICK") currentTab = "pick";
     renderCurrent_();
@@ -2773,12 +2979,23 @@
     }).then(res => {
       if (!res || !res.ok) throw new Error((res && res.error) || "Failed to complete pick");
       clearFailedAction_(orderNumber);
+      clearPendingPickMove_(orderNumber);
+      clearLocalPickProgress_(orderNumber);
       dirty.pick = false;
       dirty[targetTab] = false;
       backgroundRefreshCounts_();
     }).catch(e => {
       const failType = targetWorkflow === "DISPATCH" ? "DISPATCH_SAVE_FAILED" : "READY_SAVE_FAILED";
       markFailedAction_(orderNumber, failType, e.message || String(e));
+      setPendingPickMove_(orderNumber, {
+        targetWorkflow,
+        targetTab,
+        pickChecks: pickChecks.slice(),
+        patch: Object.assign({}, patch, { SaveFailed: true }),
+        status: "FAILED",
+        error: e.message || String(e),
+        createdAt: now
+      });
       updateOrderInCaches_(orderNumber, Object.assign({}, patch, { SaveFailed: true }));
       const cached = detailCache.get(orderNumber) || currentOrder || {};
       detailCache.set(orderNumber, Object.assign({}, cached, patch));
@@ -3299,6 +3516,7 @@
     loadDetailCacheFromSession_();
     loadFailedActionsFromSession_();
     loadPendingCourierAssignmentsFromSession_();
+    loadPendingPickMovesFromStorage_();
 
     const sb = document.getElementById("searchBox");
     if (sb) {
