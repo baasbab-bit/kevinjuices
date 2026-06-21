@@ -4,9 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Courier Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root{
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       --header:#075E54;
       --accent:#25D366;
       --accent2:#128C7E;
@@ -21,13 +24,13 @@
       --blue:#2563eb;
     }
     *{box-sizing:border-box;}
-    body{margin:0;background:var(--bg);color:var(--text);}
+    body{margin:0;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
     header{
       position:sticky;top:0;z-index:20;
       background:linear-gradient(90deg,var(--header),var(--accent2));
       color:#fff;padding:10px 12px;display:flex;gap:8px;align-items:center;
     }
-    h1{font-size:16px;margin:0;font-weight:950;}
+    h1{font-size:16px;margin:0;font-weight:700;}
     .grow{flex:1;}
     .muted{font-size:12px;color:var(--muted);}
     header .muted{color:rgba(255,255,255,.88);font-weight:800;}
@@ -44,7 +47,7 @@
     }
     .btn{
       border:1px solid #ddd;background:#fff;padding:10px 12px;border-radius:14px;
-      cursor:pointer;font-weight:950;font-size:14px;text-decoration:none;color:inherit;
+      cursor:pointer;font-weight:700;font-size:14px;text-decoration:none;color:inherit;
       display:inline-flex;align-items:center;justify-content:center;gap:6px;
       min-height:44px;
     }
@@ -55,32 +58,32 @@
     .btn[disabled]{opacity:.5;cursor:not-allowed;}
     .input{
       padding:11px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;
-      width:100%;font-weight:850;font-size:16px;min-height:46px;
+      width:100%;font-weight:500;font-size:16px;min-height:46px;
     }
     .loginBox{display:grid;gap:10px;}
-    .loginTitle{font-size:20px;font-weight:950;margin:0 0 4px;}
-    .pinInput{text-align:center;letter-spacing:6px;font-size:24px;font-weight:950;}
+    .loginTitle{font-size:20px;font-weight:700;margin:0 0 4px;}
+    .pinInput{text-align:center;letter-spacing:6px;font-size:24px;font-weight:700;}
     .topLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-    .courierName{font-weight:950;font-size:15px;}
-    .orderNo{font-weight:950;font-size:18px;letter-spacing:.2px;}
-    .customer{font-weight:950;font-size:19px;margin-top:10px;line-height:1.15;}
-    .phone{font-weight:900;margin-top:4px;font-size:15px;}
+    .courierName{font-weight:700;font-size:15px;}
+    .orderNo{font-weight:700;font-size:18px;letter-spacing:.2px;}
+    .customer{font-weight:700;font-size:19px;margin-top:10px;line-height:1.15;}
+    .phone{font-weight:600;margin-top:4px;font-size:15px;}
     .addressBox{
       margin-top:12px;padding:12px;border-radius:14px;background:#f8fafc;
       border:1px solid rgba(0,0,0,.07);
     }
-    .addressMain{font-size:17px;font-weight:950;line-height:1.25;}
-    .addressSub{font-size:13px;color:var(--muted);font-weight:850;margin-top:4px;}
+    .addressMain{font-size:17px;font-weight:700;line-height:1.25;}
+    .addressSub{font-size:13px;color:var(--muted);font-weight:500;margin-top:4px;}
     .dueBox{
       margin-top:12px;border-radius:16px;padding:14px;background:#111827;color:#fff;
       display:flex;justify-content:space-between;align-items:center;gap:10px;
     }
-    .dueAmount{font-size:26px;font-weight:950;letter-spacing:.2px;}
-    .dueLabel{font-size:12px;font-weight:950;color:rgba(255,255,255,.78);text-transform:uppercase;}
+    .dueAmount{font-size:26px;font-weight:700;letter-spacing:.2px;}
+    .dueLabel{font-size:12px;font-weight:700;color:rgba(255,255,255,.78);text-transform:uppercase;}
     .pill{
       display:inline-flex;align-items:center;border:1px solid rgba(11,27,20,.12);
       padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.72);
-      font-size:12px;font-weight:950;margin-top:8px;
+      font-size:12px;font-weight:700;margin-top:8px;
     }
     .pill.ok{border-color:rgba(37,211,102,.35);background:rgba(37,211,102,.12);color:#166534;}
     .pill.warn{border-color:rgba(255,194,66,.45);background:rgba(255,194,66,.14);color:#9a3412;}
@@ -113,7 +116,7 @@
     }
     .quickLabel{
       font-size:12px;
-      font-weight:950;
+      font-weight:700;
     }
     .outcomeActions{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px;}
     .outcomeActions .btn{width:100%;font-size:15px;}
@@ -121,7 +124,7 @@
     .hidden{display:none!important;}
     .settingsPanel{display:none;}
     .settingsPanel.show{display:block;}
-    .empty{padding:24px;text-align:center;color:var(--muted);font-weight:900;}
+    .empty{padding:24px;text-align:center;color:var(--muted);font-weight:600;}
     @media(min-width:720px){
       .orders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
       .card{margin-bottom:0;}
@@ -133,7 +136,24 @@
       .btn{font-size:13px;padding:9px 8px;}
       .dueAmount{font-size:24px;}
     }
-  </style>
+  
+    /* Typography hierarchy */
+    .orderNo{font-weight:700;}
+    .customer{font-weight:700;}
+    .phone{font-weight:500;}
+    .addressMain{font-weight:600;}
+    .addressSub{font-weight:500;}
+    .dueAmount{font-weight:800;}
+    .dueLabel{font-weight:600;letter-spacing:.35px;}
+    .btn{font-weight:700;}
+    .quickLabel{font-weight:600;}
+    .outcomeActions .btn{font-weight:700;letter-spacing:.2px;}
+    .pill{font-weight:600;}
+    .courierName{font-weight:700;}
+    .loginTitle{font-weight:700;}
+    .pinInput{font-weight:700;}
+
+</style>
 </head>
 <body>
 <header>
