@@ -208,17 +208,23 @@
 <script>
   // GitHub-hosted frontend. This page calls the Apps Script Web App API via JSONP.
   const LS_API = "pq_api_base_v2";
+  const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbzCT1sw5n6vPA1vW3kE0BwdY4IIr_WPoZj7nx-OmMBsXAOFQFCBUt7I2SfFjmxPqXUW/exec";
   const LS_SESSION = "pq_courier_portal_session_v2";
   const LS_ORDER_CACHE = "pq_courier_orders_cache_v1";
 
   let sessionCourier = null;
 
   function getApiBase(){
-    return (localStorage.getItem(LS_API) || "").trim();
+    return (localStorage.getItem(LS_API) || DEFAULT_API_URL).trim();
   }
 
   function setApiBase(v){
-    localStorage.setItem(LS_API, String(v || "").trim());
+    const value = String(v || "").trim();
+    if (!value || value === DEFAULT_API_URL) {
+      localStorage.removeItem(LS_API);
+      return;
+    }
+    localStorage.setItem(LS_API, value);
   }
 
   function saveSession(courier){
