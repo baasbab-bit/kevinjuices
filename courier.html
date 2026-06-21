@@ -94,9 +94,22 @@
       line-height:1.1;
     }
     .quickIcon{
-      font-size:24px;
-      line-height:1;
+      width:28px;
+      height:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#1d4ed8;
+    }
+    .quickSvg{
+      width:28px;
+      height:28px;
       display:block;
+      stroke:currentColor;
+      fill:none;
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-linejoin:round;
     }
     .quickLabel{
       font-size:12px;
@@ -176,6 +189,7 @@
   // GitHub-hosted frontend. This page calls the Apps Script Web App API via JSONP.
   const LS_API = "pq_api_base_v2";
   const LS_SESSION = "pq_courier_portal_session_v2";
+  const LS_ORDER_CACHE = "pq_courier_orders_cache_v1";
 
   let sessionCourier = null;
 
@@ -270,11 +284,14 @@
     return [
       "Goedendag" + (name ? " " + name : "") + ",",
       "",
-      "Uw bestelling #" + orderNumber + " is onderweg voor levering.",
-      "Openstaand bedrag: " + amountDue + ".",
+      "Ik ben onderweg met uw bestelling #" + orderNumber + ".",
       "",
-      "Kunt u aangeven of u beschikbaar bent om de bestelling in ontvangst te nemen?"
-    ].join("\\n");
+      "Openstaand bedrag: " + amountDue,
+      "",
+      "Bent u beschikbaar om de bestelling in ontvangst te nemen?",
+      "",
+      "Alvast bedankt."
+    ].join("\n");
   }
 
   function whatsappHrefForOrder_(order){
@@ -317,6 +334,61 @@
     if (loggedIn) document.getElementById("sessionCourier").textContent = sessionCourier.Name || sessionCourier.CourierId;
   }
 
+
+  function courierCacheKey_(){
+    return LS_ORDER_CACHE + "_" + String(sessionCourier && sessionCourier.CourierId || "").trim();
+  }
+
+  function saveOrdersCache_(orders){
+    try{
+      if (!sessionCourier || !sessionCourier.CourierId) return;
+      const payload = {
+        courier: sessionCourier,
+        orders: Array.isArray(orders) ? orders : [],
+        cachedAt: new Date().toISOString()
+      };
+      localStorage.setItem(courierCacheKey_(), JSON.stringify(payload));
+    }catch(e){}
+  }
+
+  function loadOrdersCache_(){
+    try{
+      if (!sessionCourier || !sessionCourier.CourierId) return null;
+      const raw = localStorage.getItem(courierCacheKey_());
+      if (!raw) return null;
+      const payload = JSON.parse(raw);
+      if (!payload || !Array.isArray(payload.orders)) return null;
+      return payload;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function cacheAgeLabel_(iso){
+    try{
+      const t = Date.parse(iso || "");
+      if (!t) return "";
+      const seconds = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (seconds < 60) return seconds + "s ago";
+      const mins = Math.floor(seconds / 60);
+      if (mins < 60) return mins + "m ago";
+      const hrs = Math.floor(mins / 60);
+      return hrs + "h ago";
+    }catch(e){ return ""; }
+  }
+
+  function renderCachedOrdersIfAvailable_(){
+    const cached = loadOrdersCache_();
+    if (!cached) return false;
+    const orders = cached.orders || [];
+    renderOrders(orders);
+    document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
+    const age = cacheAgeLabel_(cached.cachedAt);
+    setHint("Showing cached deliveries" + (age ? " · updated " + age : "") + ". Refreshing…");
+    return true;
+  }
+
+
   async function loadBuildInfo(){
     try{
       const res = await api("ping");
@@ -356,15 +428,25 @@
       return;
     }
 
-    setHint("Loading assigned deliveries…");
+    const hadCache = renderCachedOrdersIfAvailable_();
+    if (!hadCache) setHint("Loading assigned deliveries…");
 
-    const res = await api("getCourierPortalOrders", { courierId:sessionCourier.CourierId });
-    if (!res || !res.ok) throw new Error((res && res.error) || "Could not load assigned deliveries");
+    try{
+      const res = await api("getCourierPortalOrders", { courierId:sessionCourier.CourierId });
+      if (!res || !res.ok) throw new Error((res && res.error) || "Could not load assigned deliveries");
 
-    const orders = res.orders || [];
-    renderOrders(orders);
-    document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
-    setHint(orders.length ? "" : "No assigned deliveries.");
+      const orders = res.orders || [];
+      saveOrdersCache_(orders);
+      renderOrders(orders);
+      document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
+      setHint(orders.length ? "Updated just now." : "No assigned deliveries.");
+    }catch(e){
+      if (hadCache) {
+        setHint("Offline or slow connection. Showing cached deliveries.");
+        return;
+      }
+      throw e;
+    }
   }
 
   function renderOrders(orders){
@@ -410,20 +492,36 @@
         </div>
 
         <div class="quickActions">
-          <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}">
-            <span class="quickIcon">📞</span>
+          <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}" aria-label="Call customer">
+            <span class="quickIcon">
+              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2"></path>
+              </svg>
+            </span>
             <span class="quickLabel">Call</span>
           </a>
-          <a class="btn blue" href="${escapeHtml(whatsappHrefForOrder_(o))}" target="_blank" rel="noopener">
-            <span class="quickIcon">💬</span>
+          <a class="btn blue" href="${escapeHtml(whatsappHrefForOrder_(o))}" target="_blank" rel="noopener" aria-label="WhatsApp customer">
+            <span class="quickIcon">
+              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path>
+                <path d="M9 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path>
+                <path d="M14 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path>
+                <path d="M9.5 14.5c1.5 1 3.5 1 5 0"></path>
+              </svg>
+            </span>
             <span class="quickLabel">WhatsApp</span>
           </a>
-          <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener">
-            <span class="quickIcon">🧭</span>
+          <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener" aria-label="Navigate to address">
+            <span class="quickIcon">
+              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v13l-6 3z"></path>
+                <path d="M9 4v13"></path>
+                <path d="M15 7v13"></path>
+              </svg>
+            </span>
             <span class="quickLabel">Navigate</span>
           </a>
         </div>
-
         <div class="outcomeActions">
           <button class="btn primary" data-status="DELIVERED_REPORTED">DELIVERED</button>
           <button class="btn bad" data-status="CUSTOMER_NOT_HOME">CUSTOMER NOT HOME</button>
