@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Courier Portal</title>
+  <style>
+    :root{
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      --header:#075E54;
+      --accent:#25D366;
+      --accent2:#128C7E;
+      --bg:#E9F5EF;
+      --card:#fff;
+      --text:#0b1b14;
+      --muted:rgba(11,27,20,.62);
+      --border:rgba(11,27,20,.10);
+      --shadow:0 6px 18px rgba(0,0,0,.06);
+    }
+    body{margin:0;background:var(--bg);color:var(--text);}
+    header{
+      position:sticky;top:0;z-index:20;
+      background:linear-gradient(90deg,var(--header),var(--accent2));
+      color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    }
+    h1{font-size:17px;margin:0;font-weight:950;}
+    .grow{flex:1;}
+    .muted{font-size:12px;color:var(--muted);}
+    header .muted{color:rgba(255,255,255,.85);}
+    .wrap{padding:14px;}
+    .card{
+      background:var(--card);border:1px solid var(--border);border-radius:18px;
+      box-shadow:var(--shadow);padding:14px;margin-bottom:12px;
+    }
+    .btn{
+      border:1px solid #ddd;background:#fff;padding:9px 11px;border-radius:12px;
+      cursor:pointer;font-weight:900;
+    }
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#0b2b22;}
+    .btn.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412;}
+    .btn.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b;}
+    .btn[disabled]{opacity:.5;cursor:not-allowed;}
+    .input{
+      padding:9px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;
+      width:100%;box-sizing:border-box;font-weight:800;
+    }
+    .loginGrid{display:grid;gap:8px;}
+    .row{display:flex;justify-content:space-between;gap:10px;align-items:center;}
+    .orderNo{font-weight:950;font-size:16px;}
+    .name{font-weight:900;margin-top:6px;}
+    .kv{display:grid;grid-template-columns:92px 1fr;gap:5px 10px;margin-top:10px;font-size:13px;}
+    .kv .k{color:var(--muted);font-weight:800;}
+    .actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px;}
+    .pill{
+      display:inline-flex;align-items:center;border:1px solid rgba(11,27,20,.12);
+      padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.72);
+      font-size:12px;font-weight:900;margin-top:8px;
+    }
+    .pill.delivery{border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.12);color:#1d4ed8;}
+    .pill.warn{border-color:rgba(255,194,66,.45);background:rgba(255,194,66,.14);}
+    .pill.ok{border-color:rgba(37,211,102,.35);background:rgba(37,211,102,.12);}
+    .pill.bad{border-color:rgba(231,76,60,.40);background:rgba(231,76,60,.12);}
+    .statusLine{font-weight:900;margin-top:8px;}
+    .hidden{display:none!important;}
+    @media(min-width:720px){
+      .orders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+      .card{margin-bottom:0;}
+      .actions{grid-template-columns:repeat(3,1fr);}
+      .loginGrid{grid-template-columns:1fr auto auto;align-items:end;}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Courier Portal</h1>
+  <div class="grow"></div>
+  <span class="muted" id="buildInfo">not connected</span>
+  <button class="btn" id="btnRefresh">Refresh</button>
+  <button class="btn" id="btnSettings">Settings</button>
+</header>
+
+<div class="wrap">
+  <div class="card" id="settingsCard" style="display:none;">
+    <div class="loginGrid">
+      <div>
+        <div class="muted">API URL</div>
+        <input class="input" id="apiBase" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <button class="btn primary" id="btnSaveApi">Save</button>
+      <button class="btn" id="btnPing">Test</button>
+    </div>
+    <div class="muted" id="settingsMsg" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="loginGrid">
+      <div>
+        <div class="muted">Select Courier</div>
+        <select class="input" id="courierSelect">
+          <option value="">Loading couriers…</option>
+        </select>
+      </div>
+      <button class="btn primary" id="btnLogin">Open Deliveries</button>
+    </div>
+    <div style="margin-top:10px;">
+      <div class="muted">Delivery Note</div>
+      <input class="input" id="deliveryNote" placeholder="Optional note, e.g. delivered at gate / no answer / wrong address">
+    </div>
+    <div class="muted" id="hint" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="orders" id="orders"></div>
+</div>
+
+<script>
+  // GitHub-hosted frontend. This page calls the Apps Script Web App API via JSONP.
+  const LS_API = "pq_api_base_v2";
+  const LS_COURIER = "pq_courier_portal_selected_v1";
+
+  let couriers = [];
+  let selectedCourierId = "";
+
+  function getApiBase(){
+    return (localStorage.getItem(LS_API) || "").trim();
+  }
+
+  function setApiBase(v){
+    localStorage.setItem(LS_API, String(v || "").trim());
+  }
+
+  function jsonp(url){
+    return new Promise((resolve,reject)=>{
+      const cb = "cb_" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      const sep = url.indexOf("?") >= 0 ? "&" : "?";
+      s.src = url + sep + "callback=" + cb + "&_=" + Date.now();
+      s.onerror = () => { cleanup(); reject(new Error("JSONP load error")); };
+      window[cb] = data => { cleanup(); resolve(data); };
+      function cleanup(){
+        try{ delete window[cb]; }catch(e){ window[cb] = undefined; }
+        if (s && s.parentNode) s.parentNode.removeChild(s);
+      }
+      document.body.appendChild(s);
+    });
+  }
+
+  function api(action, params = {}){
+    const base = getApiBase();
+    if (!base) return Promise.reject(new Error("Missing API URL. Open Settings."));
+    const u = new URL(base);
+    u.search = "";
+    u.hash = "";
+    u.searchParams.set("action", action);
+    Object.entries(params || {}).forEach(([k,v]) => {
+      if (v !== undefined && v !== null) u.searchParams.set(k, v);
+    });
+    return jsonp(u.toString());
+  }
+
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function formatSRD(v){
+    if (v === "" || v === null || v === undefined) return "";
+    const n = Number(v || 0);
+    return "SRD " + n.toLocaleString("nl-NL", { maximumFractionDigits:2, useGrouping:false });
+  }
+
+  function deliveryStatusLabel(s){
+    const x = String(s || "").toUpperCase();
+    if (x === "DELIVERED_REPORTED") return "Delivered reported";
+    if (x === "FAILED_ATTEMPT") return "Failed attempt";
+    if (x === "CUSTOMER_NOT_HOME") return "Customer not home";
+    return x || "Assigned";
+  }
+
+  function statusKind(s){
+    const x = String(s || "").toUpperCase();
+    if (x === "DELIVERED_REPORTED") return "ok";
+    if (x === "FAILED_ATTEMPT" || x === "CUSTOMER_NOT_HOME") return "bad";
+    return "warn";
+  }
+
+  function setHint(msg){
+    document.getElementById("hint").textContent = msg || "";
+  }
+
+  async function loadBuildInfo(){
+    try{
+      const res = await api("ping");
+      document.getElementById("buildInfo").textContent = res && res.ok ? (res.build + " · " + new Date().toLocaleTimeString("nl-NL")) : "not connected";
+    }catch(e){
+      document.getElementById("buildInfo").textContent = "not connected";
+    }
+  }
+
+  async function loadCouriers(){
+    const sel = document.getElementById("courierSelect");
+    sel.innerHTML = `<option value="">Loading couriers…</option>`;
+
+    const res = await api("getCouriers");
+    if (!res || !res.ok) throw new Error((res && res.error) || "Could not load couriers");
+
+    couriers = res.couriers || [];
+    const saved = localStorage.getItem(LS_COURIER) || "";
+
+    sel.innerHTML = `<option value="">Select courier…</option>`;
+    couriers.forEach(c => {
+      const id = String(c.CourierId || "").trim();
+      if (!id) return;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = String(c.Name || id);
+      if (id === saved) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    selectedCourierId = sel.value || "";
+  }
+
+  async function loadOrders(){
+    selectedCourierId = document.getElementById("courierSelect").value || "";
+    if (!selectedCourierId) {
+      setHint("Select a courier first.");
+      document.getElementById("orders").innerHTML = "";
+      return;
+    }
+
+    localStorage.setItem(LS_COURIER, selectedCourierId);
+    setHint("Loading assigned deliveries…");
+
+    const res = await api("getCourierPortalOrders", { courierId:selectedCourierId });
+    if (!res || !res.ok) throw new Error((res && res.error) || "Could not load assigned deliveries");
+
+    renderOrders(res.orders || []);
+    setHint((res.orders || []).length ? "" : "No assigned deliveries.");
+  }
+
+  function renderOrders(orders){
+    const wrap = document.getElementById("orders");
+    wrap.innerHTML = "";
+
+    if (!orders.length) return;
+
+    orders.forEach(o => {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const address = [o.ShippingAddress, o.ShippingCity].filter(Boolean).join(", ");
+      const due = o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined
+        ? formatSRD(o.AmountDue)
+        : "";
+
+      card.innerHTML = `
+        <div class="row">
+          <div class="orderNo">${escapeHtml(o.OrderNumber)}</div>
+          <span class="pill delivery">${escapeHtml(o.CourierName || "Assigned")}</span>
+        </div>
+        <div class="name">${escapeHtml(o.CustomerName || "")}</div>
+        <div class="kv">
+          <div class="k">Phone</div><div>${escapeHtml(o.CustomerPhone || "")}</div>
+          <div class="k">Address</div><div>${escapeHtml(address || o.DeliveryArea || "")}</div>
+          <div class="k">Area</div><div>${escapeHtml(o.DeliveryArea || "")}</div>
+          <div class="k">Amount Due</div><div style="font-weight:950;">${escapeHtml(due)}</div>
+        </div>
+        <div class="statusLine">
+          <span class="pill ${statusKind(o.DeliveryStatus)}">${escapeHtml(deliveryStatusLabel(o.DeliveryStatus))}</span>
+        </div>
+        <div class="actions">
+          <button class="btn primary" data-status="DELIVERED_REPORTED">Delivered</button>
+          <button class="btn warn" data-status="FAILED_ATTEMPT">Failed Attempt</button>
+          <button class="btn bad" data-status="CUSTOMER_NOT_HOME">Customer Not Home</button>
+        </div>
+      `;
+
+      card.querySelectorAll("[data-status]").forEach(btn => {
+        btn.onclick = () => updateDeliveryStatus(o.OrderNumber, btn.getAttribute("data-status"), btn);
+      });
+
+      wrap.appendChild(card);
+    });
+  }
+
+  async function updateDeliveryStatus(orderNumber, status, btn){
+    if (!selectedCourierId) return;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+
+    try{
+      const noteEl = document.getElementById("deliveryNote");
+      const res = await api("setCourierDeliveryStatus", {
+        orderNumber,
+        courierId:selectedCourierId,
+        deliveryStatus:status,
+        note: noteEl ? noteEl.value : ""
+      });
+      if (!res || !res.ok) throw new Error((res && res.error) || "Save failed");
+      await loadOrders();
+    }catch(e){
+      alert("Save failed: " + (e.message || String(e)));
+    }finally{
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  async function init(){
+    document.getElementById("apiBase").value = getApiBase();
+    document.getElementById("btnSettings").onclick = () => {
+      const el = document.getElementById("settingsCard");
+      el.style.display = el.style.display === "none" ? "block" : "none";
+    };
+    document.getElementById("btnSaveApi").onclick = () => {
+      setApiBase(document.getElementById("apiBase").value);
+      document.getElementById("settingsMsg").textContent = "Saved.";
+      loadBuildInfo();
+      loadCouriers().catch(e => setHint(e.message || String(e)));
+    };
+    document.getElementById("btnPing").onclick = async () => {
+      try{
+        const res = await api("ping");
+        document.getElementById("settingsMsg").textContent = res && res.ok ? "Connected: " + res.build : "Ping failed";
+      }catch(e){
+        document.getElementById("settingsMsg").textContent = e.message || String(e);
+      }
+    };
+    document.getElementById("btnLogin").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
+    document.getElementById("btnRefresh").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
+    document.getElementById("courierSelect").onchange = () => {
+      selectedCourierId = document.getElementById("courierSelect").value || "";
+      localStorage.setItem(LS_COURIER, selectedCourierId);
+    };
+
+    await loadBuildInfo();
+    try{
+      await loadCouriers();
+      if (selectedCourierId) await loadOrders();
+    }catch(e){
+      setHint(e.message || String(e));
+      document.getElementById("settingsCard").style.display = "block";
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
