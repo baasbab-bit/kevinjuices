@@ -153,6 +153,17 @@
     .loginTitle{font-weight:700;}
     .pinInput{font-weight:700;}
 
+
+    .earningsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+    .earnBox{border:1px solid rgba(0,0,0,.08);background:#f8fafc;border-radius:14px;padding:10px;text-align:center;}
+    .earnValue{font-size:17px;font-weight:800;}
+    .earnLabel{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;}
+    .feeBox{margin-top:8px;border-radius:14px;padding:10px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.32);display:flex;justify-content:space-between;align-items:center;gap:10px;}
+    .feeAmount{font-size:18px;font-weight:800;color:#166534;}
+    .feeLabel{font-size:11px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.25px;}
+    .noteBox{margin-top:10px;}
+    .noteInput{min-height:44px;font-size:14px;font-weight:500;}
+
 </style>
 </head>
 <body>
@@ -198,6 +209,11 @@
       </div>
       <div class="grow"></div>
       <div class="pill warn" id="deliveryCount">0 deliveries</div>
+    </div>
+    <div class="earningsGrid">
+      <div class="earnBox"><div class="earnValue" id="earnedToday">SRD 0</div><div class="earnLabel">Earned</div></div>
+      <div class="earnBox"><div class="earnValue" id="potentialEarnings">SRD 0</div><div class="earnLabel">Potential</div></div>
+      <div class="earnBox"><div class="earnValue" id="remainingDeliveries">0</div><div class="earnLabel">Remaining</div></div>
     </div>
   </div>
 
@@ -336,17 +352,30 @@
   function deliveryStatusLabel(s){
     const x = String(s || "").toUpperCase();
     if (x === "DELIVERED_REPORTED") return "Delivered";
-    if (x === "FAILED_ATTEMPT") return "Failed Attempt";
-    if (x === "CUSTOMER_NOT_HOME") return "Customer Not Home";
-    if (x === "DISPATCHED_TO_COURIER") return "Assigned";
+    if (x === "NO_RESPONSE") return "No Response";
+    if (x === "CUSTOMER_NOT_AVAILABLE" || x === "CUSTOMER_NOT_HOME") return "Customer Not Available";
+    if (x === "FAILED_ATTEMPT") return "No Response";
     return "Assigned";
   }
 
   function statusKind(s){
     const x = String(s || "").toUpperCase();
     if (x === "DELIVERED_REPORTED") return "ok";
-    if (x === "FAILED_ATTEMPT" || x === "CUSTOMER_NOT_HOME") return "bad";
+    if (x === "NO_RESPONSE" || x === "CUSTOMER_NOT_AVAILABLE" || x === "CUSTOMER_NOT_HOME" || x === "FAILED_ATTEMPT") return "bad";
     return "warn";
+  }
+
+  function isDeliveredStatus_(s){
+    return String(s || "").toUpperCase() === "DELIVERED_REPORTED";
+  }
+
+  function courierFeeValue_(order){
+    return Number(order && order.CourierFee || 0);
+  }
+
+  function assignedTimeLabel_(order){
+    const raw = String(order && (order.DispatchAt || order.DispatchedAt || "") || "").trim();
+    return raw ? "Assigned " + raw : "Assigned";
   }
 
   function setHint(msg){
@@ -475,7 +504,19 @@
     }
   }
 
+  function updateEarningsSummary_(orders){
+    const list = Array.isArray(orders) ? orders : [];
+    const earned = list.filter(o => isDeliveredStatus_(o.DeliveryStatus)).reduce((sum, o) => sum + courierFeeValue_(o), 0);
+    const potential = list.reduce((sum, o) => sum + courierFeeValue_(o), 0);
+    const remaining = list.filter(o => !isDeliveredStatus_(o.DeliveryStatus)).length;
+    const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    set("earnedToday", formatSRD(earned));
+    set("potentialEarnings", formatSRD(potential));
+    set("remainingDeliveries", String(remaining));
+  }
+
   function renderOrders(orders){
+    updateEarningsSummary_(orders);
     const wrap = document.getElementById("orders");
     wrap.innerHTML = "";
 
@@ -510,6 +551,14 @@
             <div class="dueLabel">Amount Due</div>
           </div>
           <div class="dueLabel">${escapeHtml(o.PaymentStatus || "")}</div>
+        </div>
+
+        <div class="feeBox">
+          <div>
+            <div class="feeAmount">${escapeHtml(formatSRD(o.CourierFee || 0))}</div>
+            <div class="feeLabel">Courier Fee</div>
+          </div>
+          <div class="muted">${escapeHtml(assignedTimeLabel_(o))}</div>
         </div>
 
         <div class="addressBox">
@@ -548,10 +597,15 @@
             <span class="quickLabel">Navigate</span>
           </a>
         </div>
+        <div class="noteBox">
+          <div class="muted">Courier Note</div>
+          <input class="input noteInput" data-note-for="${escapeHtml(o.OrderNumber)}" value="${escapeHtml(o.DeliveryStatusNote || "")}" placeholder="Optional note, e.g. customer requested later">
+        </div>
+
         <div class="outcomeActions">
           <button class="btn primary" data-status="DELIVERED_REPORTED">DELIVERED</button>
-          <button class="btn bad" data-status="CUSTOMER_NOT_HOME">CUSTOMER NOT HOME</button>
-          <button class="btn warn" data-status="FAILED_ATTEMPT">FAILED ATTEMPT</button>
+          <button class="btn bad" data-status="NO_RESPONSE">NO RESPONSE</button>
+          <button class="btn warn" data-status="CUSTOMER_NOT_AVAILABLE">CUSTOMER NOT AVAILABLE</button>
         </div>
       `;
 
@@ -567,6 +621,10 @@
     if (!sessionCourier || !sessionCourier.CourierId) return;
 
     const label = btn.textContent;
+    const card = btn.closest(".deliveryCard");
+    const noteEl = card ? card.querySelector("[data-note-for='" + String(orderNumber).replace(/'/g, "\\'") + "']") : null;
+    const note = noteEl ? noteEl.value : "";
+
     btn.disabled = true;
     btn.textContent = "Saving…";
 
@@ -574,7 +632,8 @@
       const res = await api("setCourierDeliveryStatus", {
         orderNumber,
         courierId:sessionCourier.CourierId,
-        deliveryStatus:status
+        deliveryStatus:status,
+        note
       });
       if (!res || !res.ok) throw new Error((res && res.error) || "Save failed");
       await loadOrders();
@@ -613,6 +672,7 @@
       updateSessionUI();
       document.getElementById("orders").innerHTML = "";
       document.getElementById("deliveryCount").textContent = "0 deliveries";
+      updateEarningsSummary_([]);
       setHint("Logged out. Enter courier PIN.");
       document.getElementById("loginCard").classList.remove("hidden");
     };
