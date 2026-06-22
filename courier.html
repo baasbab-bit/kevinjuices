@@ -164,6 +164,12 @@
     .noteBox{margin-top:10px;}
     .noteInput{min-height:44px;font-size:14px;font-weight:500;}
 
+    .portalTabs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0 12px;}
+    .portalTab{border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:999px;padding:10px 8px;font-weight:700;cursor:pointer;touch-action:manipulation;}
+    .portalTab.active{background:#0f172a;color:#fff;border-color:#0f172a;}
+    .historyActions{display:flex;gap:8px;margin:8px 0 12px;}
+    .historyActions .btn{flex:1;}
+
 </style>
 </head>
 <body>
@@ -217,6 +223,19 @@
     </div>
   </div>
 
+
+
+  <div class="portalTabs hidden" id="portalTabs">
+    <button type="button" class="portalTab active" data-view="active">Active</button>
+    <button type="button" class="portalTab" data-view="history">History</button>
+  </div>
+
+  <div class="historyActions hidden" id="historyActions">
+    <button type="button" class="btn" data-days="7">7 Days</button>
+    <button type="button" class="btn primary" data-days="30">30 Days</button>
+    <button type="button" class="btn" data-days="90">90 Days</button>
+  </div>
+
   <div class="muted" id="hint" style="margin:8px 2px 10px;"></div>
   <div class="orders" id="orders"></div>
 </div>
@@ -227,8 +246,13 @@
   const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbzCT1sw5n6vPA1vW3kE0BwdY4IIr_WPoZj7nx-OmMBsXAOFQFCBUt7I2SfFjmxPqXUW/exec";
   const LS_SESSION = "pq_courier_portal_session_v2";
   const LS_ORDER_CACHE = "pq_courier_orders_cache_v1";
+  const LS_HISTORY_CACHE = "pq_courier_history_cache_v1";
 
   let sessionCourier = null;
+  let activeOrders = [];
+  let historyOrders = [];
+  let currentView = "active";
+  let historyDays = 30;
 
   function getApiBase(){
     return (localStorage.getItem(LS_API) || DEFAULT_API_URL).trim();
@@ -386,6 +410,10 @@
     const loggedIn = !!(sessionCourier && sessionCourier.CourierId);
     document.getElementById("loginCard").classList.toggle("hidden", loggedIn);
     document.getElementById("sessionCard").classList.toggle("hidden", !loggedIn);
+    const tabs = document.getElementById("portalTabs");
+    if (tabs) tabs.classList.toggle("hidden", !loggedIn);
+    const hist = document.getElementById("historyActions");
+    if (hist) hist.classList.toggle("hidden", !loggedIn || currentView !== "history");
     if (loggedIn) document.getElementById("sessionCourier").textContent = sessionCourier.Name || sessionCourier.CourierId;
   }
 
@@ -432,12 +460,36 @@
     }catch(e){ return ""; }
   }
 
+  function historyCacheKey_(){
+    return LS_HISTORY_CACHE + "_" + String(sessionCourier && sessionCourier.CourierId || "").trim();
+  }
+
+  function saveHistoryCache_(orders){
+    try{
+      if (!sessionCourier || !sessionCourier.CourierId) return;
+      localStorage.setItem(historyCacheKey_(), JSON.stringify({
+        orders: Array.isArray(orders) ? orders : [],
+        cachedAt: new Date().toISOString()
+      }));
+    }catch(e){}
+  }
+
+  function loadHistoryCache_(){
+    try{
+      if (!sessionCourier || !sessionCourier.CourierId) return null;
+      const raw = localStorage.getItem(historyCacheKey_());
+      if (!raw) return null;
+      const payload = JSON.parse(raw);
+      if (!payload || !Array.isArray(payload.orders)) return null;
+      return payload;
+    }catch(e){ return null; }
+  }
+
   function renderCachedOrdersIfAvailable_(){
     const cached = loadOrdersCache_();
     if (!cached) return false;
-    const orders = cached.orders || [];
-    renderOrders(orders);
-    document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
+    activeOrders = cached.orders || [];
+    renderCurrentCourierView_();
     const age = cacheAgeLabel_(cached.cachedAt);
     setHint("Showing cached deliveries" + (age ? " · updated " + age : "") + ". Refreshing…");
     return true;
@@ -483,45 +535,70 @@
       return;
     }
 
-    const hadCache = renderCachedOrdersIfAvailable_();
-    if (!hadCache) setHint("Loading assigned deliveries…");
+    const activeCached = loadOrdersCache_();
+    const historyCached = loadHistoryCache_();
+
+    if (activeCached) activeOrders = activeCached.orders || [];
+    if (historyCached) historyOrders = historyCached.orders || [];
+
+    if (activeCached || historyCached) {
+      renderCurrentCourierView_();
+      setHint("Showing cached data. Refreshing…");
+    } else {
+      setHint("Loading deliveries…");
+    }
 
     try{
-      const res = await api("getCourierPortalOrders", { courierId:sessionCourier.CourierId });
-      if (!res || !res.ok) throw new Error((res && res.error) || "Could not load assigned deliveries");
+      const activeRes = await api("getCourierActiveOrders", { courierId:sessionCourier.CourierId });
+      if (!activeRes || !activeRes.ok) throw new Error((activeRes && activeRes.error) || "Could not load active deliveries");
+      activeOrders = activeRes.orders || [];
+      saveOrdersCache_(activeOrders);
 
-      const orders = res.orders || [];
-      saveOrdersCache_(orders);
-      renderOrders(orders);
-      document.getElementById("deliveryCount").textContent = orders.length + " deliver" + (orders.length === 1 ? "y" : "ies");
-      setHint(orders.length ? "Updated just now." : "No assigned deliveries.");
+      const historyRes = await api("getCourierHistory", { courierId:sessionCourier.CourierId, days:historyDays });
+      if (!historyRes || !historyRes.ok) throw new Error((historyRes && historyRes.error) || "Could not load history");
+      historyOrders = historyRes.orders || [];
+      saveHistoryCache_(historyOrders);
+
+      renderCurrentCourierView_();
+      setHint("Updated just now.");
     }catch(e){
-      if (hadCache) {
-        setHint("Offline or slow connection. Showing cached deliveries.");
+      if (activeCached || historyCached) {
+        renderCurrentCourierView_();
+        setHint("Offline or slow connection. Showing cached data.");
         return;
       }
       throw e;
     }
   }
 
-  function updateEarningsSummary_(orders){
-    const list = Array.isArray(orders) ? orders : [];
-    const earned = list.filter(o => isDeliveredStatus_(o.DeliveryStatus)).reduce((sum, o) => sum + courierFeeValue_(o), 0);
-    const potential = list.reduce((sum, o) => sum + courierFeeValue_(o), 0);
-    const remaining = list.filter(o => !isDeliveredStatus_(o.DeliveryStatus)).length;
+  function updateEarningsSummary_(){
+    const active = Array.isArray(activeOrders) ? activeOrders : [];
+    const history = Array.isArray(historyOrders) ? historyOrders : [];
+    const earned = history.filter(o => isDeliveredStatus_(o.DeliveryStatus)).reduce((sum, o) => sum + courierFeeValue_(o), 0);
+    const potential = active.reduce((sum, o) => sum + courierFeeValue_(o), 0) + earned;
+    const remaining = active.length;
     const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
     set("earnedToday", formatSRD(earned));
     set("potentialEarnings", formatSRD(potential));
     set("remainingDeliveries", String(remaining));
+    const dc = document.getElementById("deliveryCount");
+    if (dc) dc.textContent = remaining + " active";
   }
 
-  function renderOrders(orders){
-    updateEarningsSummary_(orders);
+  function renderCurrentCourierView_(){
+    updateEarningsSummary_();
+    document.querySelectorAll(".portalTab").forEach(b => b.classList.toggle("active", b.dataset.view === currentView));
+    const histActions = document.getElementById("historyActions");
+    if (histActions) histActions.classList.toggle("hidden", currentView !== "history");
+    renderOrders(currentView === "history" ? historyOrders : activeOrders, currentView === "history");
+  }
+
+  function renderOrders(orders, historyMode){
     const wrap = document.getElementById("orders");
     wrap.innerHTML = "";
 
     if (!orders.length) {
-      wrap.innerHTML = `<div class="card empty">No assigned deliveries.</div>`;
+      wrap.innerHTML = `<div class="card empty">${historyMode ? "No history found." : "No active deliveries."}</div>`;
       return;
     }
 
@@ -558,7 +635,7 @@
             <div class="feeAmount">${escapeHtml(formatSRD(o.CourierFee || 0))}</div>
             <div class="feeLabel">Courier Fee</div>
           </div>
-          <div class="muted">${escapeHtml(assignedTimeLabel_(o))}</div>
+          <div class="muted">${escapeHtml(historyMode ? (o.DeliveryStatusAt || "") : assignedTimeLabel_(o))}</div>
         </div>
 
         <div class="addressBox">
@@ -566,37 +643,22 @@
           <div class="addressSub">${escapeHtml(o.ShippingCity || o.DeliveryArea || "")}</div>
         </div>
 
+        ${historyMode ? "" : `
         <div class="quickActions">
           <a class="btn blue" href="${escapeHtml(phoneHref(o.CustomerPhone))}" aria-label="Call customer">
-            <span class="quickIcon">
-              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2"></path>
-              </svg>
-            </span>
+            <span class="quickIcon"><svg class="quickSvg" viewBox="0 0 24 24"><path d="M5 4h4l2 5l-2.5 1.5a11 11 0 0 0 5 5l1.5 -2.5l5 2v4a2 2 0 0 1 -2 2a16 16 0 0 1 -15 -15a2 2 0 0 1 2 -2"></path></svg></span>
             <span class="quickLabel">Call</span>
           </a>
           <a class="btn blue" href="${escapeHtml(whatsappHrefForOrder_(o))}" target="_blank" rel="noopener" aria-label="WhatsApp customer">
-            <span class="quickIcon">
-              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path>
-                <path d="M9 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path>
-                <path d="M14 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path>
-                <path d="M9.5 14.5c1.5 1 3.5 1 5 0"></path>
-              </svg>
-            </span>
+            <span class="quickIcon"><svg class="quickSvg" viewBox="0 0 24 24"><path d="M3 21l1.65 -3.8a9 9 0 1 1 3.4 2.9l-5.05 .9"></path><path d="M9 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path><path d="M14 10a.5 .5 0 0 0 1 0v-.5a.5 .5 0 0 0 -1 0v.5"></path><path d="M9.5 14.5c1.5 1 3.5 1 5 0"></path></svg></span>
             <span class="quickLabel">WhatsApp</span>
           </a>
           <a class="btn blue" href="${escapeHtml(mapsHref(fullAddress))}" target="_blank" rel="noopener" aria-label="Navigate to address">
-            <span class="quickIcon">
-              <svg class="quickSvg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v13l-6 3z"></path>
-                <path d="M9 4v13"></path>
-                <path d="M15 7v13"></path>
-              </svg>
-            </span>
+            <span class="quickIcon"><svg class="quickSvg" viewBox="0 0 24 24"><path d="M12 18.5l-3 -1.5l-6 3v-13l6 -3l6 3l6 -3v13l-6 3z"></path><path d="M9 4v13"></path><path d="M15 7v13"></path></svg></span>
             <span class="quickLabel">Navigate</span>
           </a>
         </div>
+
         <div class="noteBox">
           <div class="muted">Courier Note</div>
           <input class="input noteInput" data-note-for="${escapeHtml(o.OrderNumber)}" value="${escapeHtml(o.DeliveryStatusNote || "")}" placeholder="Optional note, e.g. customer requested later">
@@ -606,12 +668,16 @@
           <button class="btn primary" data-status="DELIVERED_REPORTED">DELIVERED</button>
           <button class="btn bad" data-status="NO_RESPONSE">NO RESPONSE</button>
           <button class="btn warn" data-status="CUSTOMER_NOT_AVAILABLE">CUSTOMER NOT AVAILABLE</button>
-        </div>
+        </div>`}
+
+        ${historyMode && o.DeliveryStatusNote ? `<div class="addressBox"><div class="muted">Courier Note</div><div class="addressMain">${escapeHtml(o.DeliveryStatusNote)}</div></div>` : ""}
       `;
 
-      card.querySelectorAll("[data-status]").forEach(btn => {
-        btn.onclick = () => updateDeliveryStatus(o.OrderNumber, btn.getAttribute("data-status"), btn);
-      });
+      if (!historyMode) {
+        card.querySelectorAll("[data-status]").forEach(btn => {
+          btn.onclick = () => updateDeliveryStatus(o.OrderNumber, btn.getAttribute("data-status"), btn);
+        });
+      }
 
       wrap.appendChild(card);
     });
@@ -637,11 +703,40 @@
       });
       if (!res || !res.ok) throw new Error((res && res.error) || "Save failed");
       await loadOrders();
+      if (String(status || "").toUpperCase() === "DELIVERED_REPORTED") currentView = "history";
+      renderCurrentCourierView_();
     }catch(e){
       alert("Save failed: " + (e.message || String(e)));
     }finally{
       btn.disabled = false;
       btn.textContent = label;
+    }
+  }
+
+
+  function handlePortalTabClick_(ev){
+    const btn = ev.target && ev.target.closest ? ev.target.closest(".portalTab") : null;
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    currentView = btn.getAttribute("data-view") || "active";
+    renderCurrentCourierView_();
+  }
+
+  async function handleHistoryRangeClick_(ev){
+    const btn = ev.target && ev.target.closest ? ev.target.closest("[data-days]") : null;
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    historyDays = Number(btn.getAttribute("data-days") || 30);
+    document.querySelectorAll("[data-days]").forEach(b => b.classList.toggle("primary", b === btn));
+
+    try {
+      await loadOrders();
+    } catch(e) {
+      setHint(e.message || String(e));
     }
   }
 
@@ -669,10 +764,12 @@
 
     document.getElementById("btnLogout").onclick = () => {
       saveSession(null);
+      activeOrders = [];
+      historyOrders = [];
       updateSessionUI();
       document.getElementById("orders").innerHTML = "";
       document.getElementById("deliveryCount").textContent = "0 deliveries";
-      updateEarningsSummary_([]);
+      updateEarningsSummary_();
       setHint("Logged out. Enter courier PIN.");
       document.getElementById("loginCard").classList.remove("hidden");
     };
@@ -689,6 +786,12 @@
         });
       }
     });
+
+    const portalTabsEl = document.getElementById("portalTabs");
+    if (portalTabsEl) portalTabsEl.addEventListener("click", handlePortalTabClick_);
+
+    const historyActionsEl = document.getElementById("historyActions");
+    if (historyActionsEl) historyActionsEl.addEventListener("click", handleHistoryRangeClick_);
 
     document.getElementById("btnRefresh").onclick = () => loadOrders().catch(e => setHint(e.message || String(e)));
 
