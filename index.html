@@ -497,6 +497,7 @@
       <button type="button" class="filterBtn" data-dispatch-filter="unassigned">Unassigned <span id="dfUnassigned">0</span></button>
       <button type="button" class="filterBtn" data-dispatch-filter="assigned">Assigned <span id="dfAssigned">0</span></button>
       <span id="dispatchCourierFilters" style="display:flex; gap:8px; flex-wrap:wrap;"></span>
+      <button type="button" class="filterBtn" id="btnNotifyCourier" style="display:none;">Notify Courier</button>
     </div>
     <div class="muted" id="debugInfo" style="margin-top:4px;"></div>
     <div class="grid" id="listPick"></div>
@@ -872,6 +873,146 @@
     document.querySelectorAll("[data-dispatch-filter]").forEach(b => {
       b.classList.toggle("active", b.getAttribute("data-dispatch-filter") === dispatchFilter);
     });
+    updateNotifyCourierButton_();
+  }
+
+  function courierPortalUrl_(){
+    return "https://baasbab-bit.github.io/kevinjuices/courier";
+  }
+
+  function digitsOnly_(v){
+    return String(v || "").replace(/\D/g, "");
+  }
+
+  function whatsappUrl_(phone, message){
+    const d = digitsOnly_(phone);
+    if (!d) return "";
+    return "https://wa.me/" + d + "?text=" + encodeURIComponent(message || "");
+  }
+
+  function getSelectedDispatchCourierId_(){
+    const f = String(dispatchFilter || "").trim();
+    return f.indexOf("courier:") === 0 ? f.substring("courier:".length) : "";
+  }
+
+  function getDispatchOrdersForCourier_(courierId){
+    const cid = String(courierId || "").trim();
+    if (!cid) return [];
+    return (pools.dispatch || []).filter(o => String(o && o.CourierId || "").trim() === cid);
+  }
+
+  function getCourierInfoForDispatch_(courierId, orders){
+    const cid = String(courierId || "").trim();
+    const c = (couriers || []).find(x => String(x && x.CourierId || "").trim() === cid);
+    const firstOrder = (orders || [])[0] || {};
+    return {
+      CourierId: cid,
+      Name: String((c && c.Name) || firstOrder.CourierName || cid || "").trim(),
+      Phone: String((c && c.Phone) || firstOrder.CourierPhone || "").trim()
+    };
+  }
+
+  function buildCourierNotifyMessage_(courier, orders){
+    const name = String(courier && courier.Name || "").trim();
+    const list = Array.isArray(orders) ? orders : [];
+
+    let totalDue = 0;
+    const lines = [];
+
+    lines.push("*Nieuwe levering" + (list.length === 1 ? "" : "en") + "*");
+    lines.push("");
+    lines.push("Hi" + (name ? " " + name : "") + ",");
+    lines.push("");
+    lines.push("Je hebt *" + list.length + "* nieuwe levering" + (list.length === 1 ? "" : "en") + " toegewezen gekregen.");
+    lines.push("");
+
+    list.forEach((o, idx) => {
+      const orderNo = String(o && o.OrderNumber || "").trim();
+      const customer = String(o && o.CustomerName || "").trim();
+      const phone = String(o && o.CustomerPhone || "").trim();
+      const addressParts = [
+        String(o && o.ShippingAddress || "").trim(),
+        String(o && o.ShippingCity || "").trim()
+      ].filter(Boolean);
+      const address = addressParts.length
+        ? addressParts.join(", ")
+        : String((o && (o.DeliveryArea || o.ShippingAddress || o.ShippingCity)) || "").trim();
+
+      const dueValue = (o && o.AmountDue !== "" && o.AmountDue !== null && o.AmountDue !== undefined)
+        ? Number(o.AmountDue || 0)
+        : Number(o && o.OrderTotalSRD || 0);
+
+      const isPaid = dueValue <= 0;
+      totalDue += Math.max(0, dueValue);
+
+      lines.push("*ORDER #" + orderNo + "*");
+      if (customer) lines.push("*Klant:* " + customer);
+      if (phone) lines.push("*Tel:* " + phone);
+      if (address) lines.push("*Adres:* " + address);
+      lines.push(isPaid ? "*Betaling:* Betaald" : ("*Openstaand:* " + formatSRD(dueValue)));
+
+      if (idx < list.length - 1) {
+        lines.push("");
+        lines.push("--------------------");
+        lines.push("");
+      }
+    });
+
+    lines.push("");
+    lines.push("====================");
+    lines.push("");
+    lines.push("*Totaal te innen:*");
+    lines.push("*" + formatSRD(totalDue) + "*");
+    lines.push("");
+    lines.push("*Courier Portal:*");
+    lines.push(courierPortalUrl_());
+    lines.push("");
+    lines.push("Gelieve de status per levering bij te werken via de portal.");
+
+    return lines.join("\n");
+  }
+
+  function updateNotifyCourierButton_(){
+    const btn = document.getElementById("btnNotifyCourier");
+    if (!btn) return;
+
+    const courierId = getSelectedDispatchCourierId_();
+    const show = currentTab === "dispatch" && !!courierId;
+    btn.style.display = show ? "inline-flex" : "none";
+
+    if (!show) return;
+
+    const orders = getDispatchOrdersForCourier_(courierId);
+    btn.textContent = "Notify Courier" + (orders.length ? " (" + orders.length + ")" : "");
+  }
+
+  function notifySelectedDispatchCourier_(){
+    const courierId = getSelectedDispatchCourierId_();
+    if (!courierId) {
+      alert("Selecteer eerst een courier filter in Dispatch.");
+      return;
+    }
+
+    const orders = getDispatchOrdersForCourier_(courierId);
+    if (!orders.length) {
+      alert("Geen dispatch orders gevonden voor deze courier.");
+      return;
+    }
+
+    const courier = getCourierInfoForDispatch_(courierId, orders);
+    if (!courier.Phone) {
+      alert("Geen telefoonnummer gevonden voor deze courier. Vul het telefoonnummer in de Couriers sheet in.");
+      return;
+    }
+
+    const msg = buildCourierNotifyMessage_(courier, orders);
+    const url = whatsappUrl_(courier.Phone, msg);
+    if (!url) {
+      alert("Ongeldig telefoonnummer voor courier.");
+      return;
+    }
+
+    window.open(url, "_blank", "noopener");
   }
 
   function formatSRD(v){
@@ -1629,6 +1770,7 @@
       updateDispatchFilterCounts_();
       renderDispatchCourierFilters_();
       syncDispatchFilterActiveButtons_();
+      updateNotifyCourierButton_();
     }
     updateBulkPickVisibility_();
     setDebug_(`tab=${tab} • total=${orders.length} • q="${searchQuery}"`);
@@ -1805,6 +1947,9 @@
       updateDispatchFilterCounts_();
       renderDispatchCourierFilters_();
       syncDispatchFilterActiveButtons_();
+      updateNotifyCourierButton_();
+    } else {
+      updateNotifyCourierButton_();
     }
     if (cachesLoaded[currentTab]) renderCurrent_();
   }
@@ -3319,6 +3464,15 @@
       renderSigByTab.dispatch = null;
       renderCurrent_();
     });
+  }
+
+  const btnNotifyCourier = document.getElementById("btnNotifyCourier");
+  if (btnNotifyCourier) {
+    btnNotifyCourier.onclick = ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      notifySelectedDispatchCourier_();
+    };
   }
 
 
