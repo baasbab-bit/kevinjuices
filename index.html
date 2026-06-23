@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="nl">
 <head>
@@ -458,6 +459,37 @@
       background:rgba(255,255,255,.72);
     }
     .bulkPickProgress{font-weight:950;}
+
+
+    .dispatchCourierStatusBox{
+      margin-top:8px;
+      padding:9px 10px;
+      border-radius:12px;
+      border:1px solid rgba(249,115,22,.28);
+      background:rgba(255,247,237,.86);
+      font-size:12px;
+      line-height:1.35;
+    }
+    .dispatchCourierStatusBox .dcsTop{
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      align-items:center;
+      font-weight:950;
+      color:#9a3412;
+    }
+    .dispatchCourierStatusBox .dcsNote{
+      margin-top:5px;
+      color:#111827;
+      font-weight:800;
+      word-break:break-word;
+    }
+    .dispatchCourierStatusBox .dcsMeta{
+      margin-top:4px;
+      color:var(--wa-muted);
+      font-size:11px;
+      font-weight:800;
+    }
 
 </style>
 </head>
@@ -1076,6 +1108,22 @@
     return "Handled";
   }
 
+  function displayDeliveryStatusForOps_(s){
+    const x = String(s || "").trim().toUpperCase();
+    if (!x || x === "DISPATCHED_TO_COURIER") return "Assigned";
+    if (x === "DELIVERED_REPORTED") return "Delivered reported";
+    if (x === "NO_RESPONSE" || x === "FAILED_ATTEMPT") return "No Response";
+    if (x === "CUSTOMER_NOT_AVAILABLE" || x === "CUSTOMER_NOT_HOME") return "Customer Not Available";
+    return String(s || "Assigned");
+  }
+
+  function deliveryStatusKindForOps_(s){
+    const x = String(s || "").trim().toUpperCase();
+    if (x === "DELIVERED_REPORTED") return "ok";
+    if (x === "NO_RESPONSE" || x === "FAILED_ATTEMPT" || x === "CUSTOMER_NOT_AVAILABLE" || x === "CUSTOMER_NOT_HOME") return "bad";
+    return "warn";
+  }
+
 
 
   function normFulfillmentType_(s){
@@ -1464,6 +1512,26 @@
         areaLine.style.fontWeight = "900";
         areaLine.textContent = "Area: " + (o.DeliveryArea || o.ShippingCity || o.ShippingAddress || "");
         card.appendChild(areaLine);
+      }
+
+      if (workflow === "DISPATCH" && (o.CourierName || o.DeliveryStatus || o.DeliveryStatusNote || o.DeliveryStatusAt)) {
+        const box = document.createElement("div");
+        box.className = "dispatchCourierStatusBox";
+        const status = displayDeliveryStatusForOps_(o.DeliveryStatus);
+        const kind = deliveryStatusKindForOps_(o.DeliveryStatus);
+        const note = String(o.DeliveryStatusNote || "").trim();
+        const at = formatDateDisplay_(o.DeliveryStatusAt || "");
+        const courier = String(o.CourierName || "").trim();
+
+        box.innerHTML = `
+          <div class="dcsTop">
+            <span>Courier: ${escapeHtml(courier || "Unassigned")}</span>
+            <span class="pill ${escapeHtml(kind)}" style="margin-top:0;">${escapeHtml(status)}</span>
+          </div>
+          ${note ? `<div class="dcsNote">Note: ${escapeHtml(note)}</div>` : ""}
+          ${at ? `<div class="dcsMeta">Last update: ${escapeHtml(at)}</div>` : ""}
+        `;
+        card.appendChild(box);
       }
 
       return card;
