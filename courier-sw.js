@@ -1,4 +1,4 @@
-const COURIER_CACHE = "courier-pwa-v1";
+const COURIER_CACHE = "courier-pwa-v2";
 const APP_SHELL = [
   "./courier",
   "./courier.html",
@@ -50,4 +50,32 @@ self.addEventListener("fetch", event => {
       return res;
     }))
   );
+});
+
+
+self.addEventListener("message", event => {
+  if (event && event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener("push", event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch(e) { data = {}; }
+
+  const title = data.title || "New delivery assigned";
+  const options = {
+    body: data.body || "Open Courier Portal to view assigned deliveries.",
+    icon: "./courier-icon-192.png",
+    badge: "./courier-icon-192.png",
+    data: { url: data.url || "./courier" }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const url = event.notification && event.notification.data && event.notification.data.url ? event.notification.data.url : "./courier";
+  event.waitUntil(clients.openWindow(url));
 });
