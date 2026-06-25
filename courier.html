@@ -177,9 +177,54 @@
     .historyActions{display:flex;gap:8px;margin:8px 0 12px;}
     .historyActions .btn{flex:1;}
 
+
+    .appSplash{
+      position:fixed;inset:0;z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(160deg,#075E54,#128C7E);
+      color:#fff;transition:opacity .22s ease,visibility .22s ease;
+    }
+    .appSplash.hide{opacity:0;visibility:hidden;}
+    .splashInner{text-align:center;padding:24px;}
+    .splashIcon{
+      width:74px;height:74px;border-radius:22px;margin:0 auto 14px;
+      background:#25D366;display:flex;align-items:center;justify-content:center;
+      font-size:32px;font-weight:800;color:#073f37;box-shadow:0 14px 36px rgba(0,0,0,.18);
+    }
+    .splashTitle{font-size:22px;font-weight:800;}
+    .splashSub{margin-top:6px;color:rgba(255,255,255,.82);font-weight:600;}
+    .connectionBanner,.updateBanner{
+      position:sticky;top:0;z-index:30;
+      margin:-2px -12px 10px;padding:9px 12px;
+      display:none;align-items:center;gap:8px;
+      font-size:13px;font-weight:700;border-radius:0 0 14px 14px;
+    }
+    .connectionBanner.show,.updateBanner.show{display:flex;}
+    .connectionBanner.offline{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;}
+    .connectionBanner.online{background:#ecfdf5;color:#166534;border:1px solid #bbf7d0;}
+    .statusDot{width:9px;height:9px;border-radius:999px;background:currentColor;display:inline-block;}
+    .updateBanner{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;justify-content:space-between;}
+    .updateBanner .btn{min-height:34px;padding:6px 10px;font-size:12px;border-radius:10px;}
+    .pullRefresh{
+      position:fixed;left:50%;top:10px;transform:translateX(-50%) translateY(-120%);
+      z-index:80;background:#fff;color:#075E54;border:1px solid rgba(0,0,0,.12);
+      box-shadow:0 8px 22px rgba(0,0,0,.12);border-radius:999px;
+      padding:8px 14px;font-size:13px;font-weight:800;transition:transform .16s ease;
+    }
+    .pullRefresh.show{transform:translateX(-50%) translateY(0);}
+    .notifyBox{display:flex;gap:8px;align-items:center;margin-top:10px;}
+
 </style>
 </head>
 <body>
+<div class="appSplash" id="appSplash">
+  <div class="splashInner">
+    <div class="splashIcon">KJ</div>
+    <div class="splashTitle">Courier Portal</div>
+    <div class="splashSub">Loading deliveries...</div>
+  </div>
+</div>
+<div class="pullRefresh" id="pullRefresh">Release to refresh</div>
 <header>
   <h1>Courier Portal</h1>
   <div class="grow"></div>
@@ -189,6 +234,8 @@
 </header>
 
 <div class="wrap">
+  <div class="connectionBanner" id="connectionBanner"><span class="statusDot"></span><span id="connectionBannerText">Offline Mode</span></div>
+  <div class="updateBanner" id="updateBanner"><span>New version available</span><button class="btn blue" id="btnApplyUpdate">Update</button></div>
   <div class="card settingsPanel" id="settingsCard">
     <div class="loginBox">
       <div>
@@ -747,7 +794,200 @@
     }
   }
 
+
+  let swRegistration_ = null;
+  let waitingWorker_ = null;
+  let lastActiveOrderNumbers_ = [];
+  let firstLiveLoadDone_ = false;
+  let pullStartY_ = 0;
+  let pullTracking_ = false;
+  let pullTriggered_ = false;
+
+  function hideSplash_(){
+    const el = document.getElementById("appSplash");
+    if (!el) return;
+    setTimeout(() => el.classList.add("hide"), 250);
+  }
+
+  function showConnectionBanner_(mode, text, autoHide){
+    const b = document.getElementById("connectionBanner");
+    const t = document.getElementById("connectionBannerText");
+    if (!b || !t) return;
+
+    b.classList.remove("offline", "online");
+    b.classList.add(mode === "online" ? "online" : "offline");
+    t.textContent = text || (mode === "online" ? "Connected" : "Offline Mode");
+    b.classList.add("show");
+
+    if (autoHide) {
+      setTimeout(() => b.classList.remove("show"), 2600);
+    }
+  }
+
+  function updateOnlineState_(){
+    if (navigator.onLine) {
+      showConnectionBanner_("online", "Connected. Orders can sync.", true);
+    } else {
+      showConnectionBanner_("offline", "Offline Mode. Showing last synced orders.", false);
+    }
+  }
+
+  function showUpdateBanner_(){
+    const b = document.getElementById("updateBanner");
+    if (b) b.classList.add("show");
+  }
+
+  function applyPwaUpdate_(){
+    if (waitingWorker_) {
+      waitingWorker_.postMessage({ type:"SKIP_WAITING" });
+    } else {
+      location.reload();
+    }
+  }
+
+  async function registerPwa_(){
+    if (!("serviceWorker" in navigator)) return;
+
+    try {
+      swRegistration_ = await navigator.serviceWorker.register("./courier-sw.js");
+
+      if (swRegistration_.waiting) {
+        waitingWorker_ = swRegistration_.waiting;
+        showUpdateBanner_();
+      }
+
+      swRegistration_.addEventListener("updatefound", () => {
+        const worker = swRegistration_.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            waitingWorker_ = worker;
+            showUpdateBanner_();
+          }
+        });
+      });
+
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        location.reload();
+      });
+    } catch(err) {
+      console.warn("Courier PWA service worker registration failed:", err);
+    }
+  }
+
+  function updateAppBadge_(){
+    const count = Array.isArray(activeOrders) ? activeOrders.length : 0;
+
+    try {
+      if ("setAppBadge" in navigator) {
+        if (count > 0) navigator.setAppBadge(count);
+        else navigator.clearAppBadge();
+      }
+    } catch(e) {}
+  }
+
+  function updateNotificationStatus_(){
+    const el = document.getElementById("notificationStatus");
+    if (!el) return;
+
+    if (!("Notification" in window)) {
+      el.textContent = "Notifications not supported on this phone.";
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      el.textContent = "Alerts enabled while app is running.";
+    } else if (Notification.permission === "denied") {
+      el.textContent = "Alerts blocked in browser settings.";
+    } else {
+      el.textContent = "Tap to allow local alerts.";
+    }
+  }
+
+  async function enableNotifications_(){
+    if (!("Notification" in window)) {
+      updateNotificationStatus_();
+      return;
+    }
+
+    try {
+      await Notification.requestPermission();
+      updateNotificationStatus_();
+    } catch(e) {
+      updateNotificationStatus_();
+    }
+  }
+
+  function maybeNotifyNewDeliveries_(newOrders){
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (document.visibilityState === "visible" && firstLiveLoadDone_) return;
+
+    const currentNumbers = (newOrders || []).map(o => String(o.OrderNumber || "").trim()).filter(Boolean);
+    const previous = new Set(lastActiveOrderNumbers_);
+    const added = currentNumbers.filter(n => !previous.has(n));
+
+    if (firstLiveLoadDone_ && added.length) {
+      try {
+        new Notification("New delivery assigned", {
+          body: added.length === 1 ? "Order #" + added[0] + " is now active." : added.length + " new deliveries assigned.",
+          icon: "./courier-icon-192.png"
+        });
+      } catch(e) {}
+    }
+
+    lastActiveOrderNumbers_ = currentNumbers;
+    firstLiveLoadDone_ = true;
+  }
+
+  function setupPullToRefresh_(){
+    const indicator = document.getElementById("pullRefresh");
+    if (!indicator) return;
+
+    window.addEventListener("touchstart", ev => {
+      if (window.scrollY > 2 || !sessionCourier) return;
+      const t = ev.touches && ev.touches[0];
+      if (!t) return;
+      pullStartY_ = t.clientY;
+      pullTracking_ = true;
+      pullTriggered_ = false;
+    }, { passive:true });
+
+    window.addEventListener("touchmove", ev => {
+      if (!pullTracking_) return;
+      const t = ev.touches && ev.touches[0];
+      if (!t) return;
+      const diff = t.clientY - pullStartY_;
+      if (diff > 70) {
+        pullTriggered_ = true;
+        indicator.textContent = "Release to refresh";
+        indicator.classList.add("show");
+      } else if (diff > 30) {
+        indicator.textContent = "Pull to refresh";
+        indicator.classList.add("show");
+      }
+    }, { passive:true });
+
+    window.addEventListener("touchend", () => {
+      if (!pullTracking_) return;
+      pullTracking_ = false;
+
+      if (pullTriggered_) {
+        indicator.textContent = "Refreshing...";
+        loadAllData()
+          .catch(e => setHint(e.message || String(e)))
+          .finally(() => setTimeout(() => indicator.classList.remove("show"), 600));
+      } else {
+        indicator.classList.remove("show");
+      }
+    }, { passive:true });
+  }
+
   async function init(){
+    setupPullToRefresh_();
+    updateNotificationStatus_();
+    window.addEventListener("online", () => { updateOnlineState_(); loadAllData().catch(e => setHint(e.message || String(e))); });
+    window.addEventListener("offline", updateOnlineState_);
+    updateOnlineState_();
     document.getElementById("apiBase").value = getApiBase();
 
     document.getElementById("btnSettings").onclick = () => {
@@ -818,16 +1058,8 @@
     }
   }
 
-  init();
-
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./courier-sw.js").catch(function (err) {
-        console.warn("Courier PWA service worker registration failed:", err);
-      });
-    });
-  }
-
+  init().finally(hideSplash_);
+  registerPwa_();
 </script>
 </body>
 </html>
