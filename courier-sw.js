@@ -1,4 +1,4 @@
-const COURIER_CACHE = "courier-pwa-v2";
+const COURIER_CACHE = "courier-pwa-v3";
 const APP_SHELL = [
   "./courier",
   "./courier.html",
@@ -32,13 +32,15 @@ self.addEventListener("fetch", event => {
 
   if (req.mode === "navigate" || url.pathname.endsWith("/courier") || url.pathname.endsWith("/courier.html")) {
     event.respondWith(
-      fetch(req)
-        .then(res => {
+      caches.match(req).then(cached => {
+        const network = fetch(req).then(res => {
           const copy = res.clone();
           caches.open(COURIER_CACHE).then(cache => cache.put(req, copy));
           return res;
-        })
-        .catch(() => caches.match(req).then(cached => cached || caches.match("./courier.html")))
+        }).catch(() => null);
+
+        return cached || network.then(res => res || caches.match("./courier.html"));
+      })
     );
     return;
   }

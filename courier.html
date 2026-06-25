@@ -73,7 +73,7 @@
     .topLine{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
     .courierName{font-weight:700;font-size:15px;}
     .orderNo{font-weight:700;font-size:18px;letter-spacing:.2px;}
-    .customer{font-weight:700;font-size:19px;margin-top:10px;line-height:1.15;}
+    .customer{font-weight:700;font-size:19px;margin-top:calc(env(safe-area-inset-top, 0px) + 8px);line-height:1.15;}
     .phone{font-weight:600;margin-top:4px;font-size:15px;}
     .addressBox{
       margin-top:12px;padding:12px;border-radius:14px;background:#f8fafc;
@@ -161,14 +161,14 @@
     .pinInput{font-weight:700;}
 
 
-    .earningsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+    .earningsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:calc(env(safe-area-inset-top, 0px) + 8px);}
     .earnBox{border:1px solid rgba(0,0,0,.08);background:#f8fafc;border-radius:14px;padding:10px;text-align:center;}
     .earnValue{font-size:17px;font-weight:800;}
     .earnLabel{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;}
     .feeBox{margin-top:8px;border-radius:14px;padding:10px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.32);display:flex;justify-content:space-between;align-items:center;gap:10px;}
     .feeAmount{font-size:18px;font-weight:800;color:#166534;}
     .feeLabel{font-size:11px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.25px;}
-    .noteBox{margin-top:10px;}
+    .noteBox{margin-top:calc(env(safe-area-inset-top, 0px) + 8px);}
     .noteInput{min-height:44px;font-size:14px;font-weight:500;}
 
     .portalTabs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0 12px;}
@@ -206,13 +206,37 @@
     .updateBanner{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;justify-content:space-between;}
     .updateBanner .btn{min-height:34px;padding:6px 10px;font-size:12px;border-radius:10px;}
     .pullRefresh{
-      position:fixed;left:50%;top:10px;transform:translateX(-50%) translateY(-120%);
+      position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 8px);transform:translateX(-50%) translateY(-220%);
       z-index:80;background:#fff;color:#075E54;border:1px solid rgba(0,0,0,.12);
       box-shadow:0 8px 22px rgba(0,0,0,.12);border-radius:999px;
       padding:8px 14px;font-size:13px;font-weight:800;transition:transform .16s ease;
     }
     .pullRefresh.show{transform:translateX(-50%) translateY(0);}
-    .notifyBox{display:flex;gap:8px;align-items:center;margin-top:10px;}
+    .notifyBox{display:flex;gap:8px;align-items:center;margin-top:calc(env(safe-area-inset-top, 0px) + 8px);}
+
+
+    header .headerIconBtn{
+      width:46px;
+      min-width:46px;
+      height:46px;
+      padding:0;
+      border-radius:16px;
+      font-size:0;
+      line-height:0;
+    }
+    header .headerIconBtn svg{
+      width:23px;
+      height:23px;
+      stroke:currentColor;
+      fill:none;
+      stroke-width:2.4;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+    @media(display-mode:standalone){
+      header{padding-top:12px;}
+      header .muted{display:none!important;}
+    }
 
 </style>
 </head>
@@ -229,8 +253,12 @@
   <h1>Courier Portal</h1>
   <div class="grow"></div>
   <span class="muted" id="buildInfo">not connected</span>
-  <button class="btn" id="btnRefresh">Refresh</button>
-  <button class="btn" id="btnSettings">Settings</button>
+  <button class="btn headerIconBtn" id="btnRefresh" aria-label="Refresh" title="Refresh">
+    <svg viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg>
+  </button>
+  <button class="btn headerIconBtn" id="btnSettings" aria-label="Settings" title="Settings">
+    <svg viewBox="0 0 24 24"><path d="M10.3 4.3c.4 -1.6 2.9 -1.6 3.4 0a1.8 1.8 0 0 0 2.7 1.1c1.4 -.9 3.2 .9 2.3 2.3a1.8 1.8 0 0 0 1.1 2.7c1.6 .4 1.6 2.9 0 3.4a1.8 1.8 0 0 0 -1.1 2.7c.9 1.4 -.9 3.2 -2.3 2.3a1.8 1.8 0 0 0 -2.7 1.1c-.4 1.6 -2.9 1.6 -3.4 0a1.8 1.8 0 0 0 -2.7 -1.1c-1.4 .9 -3.2 -.9 -2.3 -2.3a1.8 1.8 0 0 0 -1.1 -2.7c-1.6 -.4 -1.6 -2.9 0 -3.4a1.8 1.8 0 0 0 1.1 -2.7c-.9 -1.4 .9 -3.2 2.3 -2.3c1 .6 2.3 .1 2.7 -1.1z"></path><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"></path></svg>
+  </button>
 </header>
 
 <div class="wrap">
